@@ -46,27 +46,52 @@ class AudioManager: ObservableObject {
     }
 
     private func playSound(_ sound: Sound) {
-        // Swift Playground에서 리소스 찾기 (여러 방법 시도)
+        // Swift Package Manager에서 리소스 찾기
         var soundURL: URL?
 
-        // 방법 1: Bundle.main에서 찾기 (Resources 서브디렉토리)
-        soundURL = Bundle.main.url(forResource: sound.fileName, withExtension: "wav", subdirectory: "Resources")
+        // 방법 1: Bundle.module 사용 (Swift Package Manager)
+        #if canImport(Foundation)
+        if let moduleBundle = Bundle(identifier: "KSORi.AppModule") ?? Bundle.main.path(forResource: "AppModule", ofType: "bundle").flatMap(Bundle.init(path:)) {
+            soundURL = moduleBundle.url(forResource: sound.fileName, withExtension: "wav", subdirectory: "Resources")
+            if soundURL != nil {
+                print("✅ 방법 1 (module bundle): 파일 찾음")
+            }
+        }
+        #endif
 
-        // 방법 2: Bundle.main에서 직접 찾기
+        // 방법 2: Bundle.main에서 찾기 (Resources 서브디렉토리)
         if soundURL == nil {
-            soundURL = Bundle.main.url(forResource: sound.fileName, withExtension: "wav")
+            soundURL = Bundle.main.url(forResource: sound.fileName, withExtension: "wav", subdirectory: "Resources")
+            if soundURL != nil {
+                print("✅ 방법 2 (main bundle Resources): 파일 찾음")
+            }
         }
 
-        // 방법 3: 프로젝트 디렉토리에서 직접 찾기
+        // 방법 3: Bundle.main에서 직접 찾기
+        if soundURL == nil {
+            soundURL = Bundle.main.url(forResource: sound.fileName, withExtension: "wav")
+            if soundURL != nil {
+                print("✅ 방법 3 (main bundle): 파일 찾음")
+            }
+        }
+
+        // 방법 4: 프로젝트 디렉토리에서 직접 찾기
         if soundURL == nil {
             let fileManager = FileManager.default
-            if let projectPath = Bundle.main.resourcePath {
-                let resourcesPath = (projectPath as NSString).appendingPathComponent("Resources")
-                let filePath = (resourcesPath as NSString).appendingPathComponent("\(sound.fileName).wav")
+            if let resourcePath = Bundle.main.resourcePath {
+                // 여러 경로 시도
+                let paths = [
+                    (resourcePath as NSString).appendingPathComponent("Resources/\(sound.fileName).wav"),
+                    (resourcePath as NSString).appendingPathComponent("\(sound.fileName).wav"),
+                    (resourcePath as NSString).deletingLastPathComponent.appending("/Resources/\(sound.fileName).wav")
+                ]
 
-                if fileManager.fileExists(atPath: filePath) {
-                    soundURL = URL(fileURLWithPath: filePath)
-                    print("✅ 방법 3으로 파일 찾음: \(filePath)")
+                for path in paths {
+                    if fileManager.fileExists(atPath: path) {
+                        soundURL = URL(fileURLWithPath: path)
+                        print("✅ 방법 4 (직접 경로): 파일 찾음 - \(path)")
+                        break
+                    }
                 }
             }
         }
@@ -75,6 +100,14 @@ class AudioManager: ObservableObject {
             print("❌ 사운드 파일을 찾을 수 없음: \(sound.fileName).wav")
             print("📁 Bundle path: \(Bundle.main.bundlePath)")
             print("📁 Resource path: \(Bundle.main.resourcePath ?? "nil")")
+
+            // 디버깅: Resources 폴더 내용 확인
+            if let resourcePath = Bundle.main.resourcePath {
+                let resourcesDir = (resourcePath as NSString).appendingPathComponent("Resources")
+                if let files = try? FileManager.default.contentsOfDirectory(atPath: resourcesDir) {
+                    print("📂 Resources 폴더 내용: \(files)")
+                }
+            }
             return
         }
 
