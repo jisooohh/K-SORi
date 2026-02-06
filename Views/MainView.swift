@@ -159,13 +159,14 @@ struct MainView: View {
     // MARK: - Actions
 
     private func handlePadTapped(_ sound: Sound) {
-        activePads.insert(sound.position)
-        audioManager.playSound(sound)
+        // Toggle 방식: 재생 중이면 정지, 정지 중이면 재생
+        audioManager.toggleSound(sound)
         hapticManager.playHaptic(for: sound.category)
 
-        // AudioManager now handles amplitude updates automatically via metering timer
-        // Remove active pad state after sound duration
-        DispatchQueue.main.asyncAfter(deadline: .now() + sound.duration) {
+        // activePads 상태 업데이트
+        if audioManager.isPlaying(at: sound.position) {
+            activePads.insert(sound.position)
+        } else {
             activePads.remove(sound.position)
         }
     }

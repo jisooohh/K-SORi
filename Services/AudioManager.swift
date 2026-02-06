@@ -34,7 +34,18 @@ class AudioManager: ObservableObject {
         }
     }
 
-    func playSound(_ sound: Sound) {
+    // Toggle 방식: 재생 중이면 정지, 정지 중이면 재생
+    func toggleSound(_ sound: Sound) {
+        if let player = audioPlayers[sound.position], player.isPlaying {
+            // 이미 재생 중이면 정지
+            stopSound(at: sound.position)
+        } else {
+            // 정지 중이면 재생 시작
+            playSound(sound)
+        }
+    }
+
+    private func playSound(_ sound: Sound) {
         // 실제 음원 파일이 있을 때 사용
         guard let soundURL = Bundle.main.url(forResource: sound.fileName, withExtension: "mp3") ??
               Bundle.main.url(forResource: sound.fileName, withExtension: "wav") else {
@@ -46,21 +57,24 @@ class AudioManager: ObservableObject {
         do {
             let player = try AVAudioPlayer(contentsOf: soundURL)
             player.isMeteringEnabled = true // 중요: 메터링 활성화
+            player.numberOfLoops = -1 // 무한 반복 재생
             player.prepareToPlay()
             player.volume = 1.0
             player.play()
 
             audioPlayers[sound.position] = player
-
-            // 재생이 끝나면 플레이어 제거
-            DispatchQueue.main.asyncAfter(deadline: .now() + sound.duration) { [weak self] in
-                self?.audioPlayers.removeValue(forKey: sound.position)
-                self?.currentAmplitudes[sound.position] = 0.0
-            }
         } catch {
             print("오디오 재생 실패: \(error.localizedDescription)")
             playPlaceholderSound(for: sound)
         }
+    }
+
+    // 재생 중인지 확인
+    func isPlaying(at position: Int) -> Bool {
+        if let player = audioPlayers[position] {
+            return player.isPlaying
+        }
+        return false
     }
 
     // 실제 음원이 없을 때 사용할 임시 사운드
