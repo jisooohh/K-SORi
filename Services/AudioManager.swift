@@ -46,26 +46,52 @@ class AudioManager: ObservableObject {
     }
 
     private func playSound(_ sound: Sound) {
-        // 실제 음원 파일이 있을 때 사용
-        guard let soundURL = Bundle.main.url(forResource: sound.fileName, withExtension: "mp3") ??
-              Bundle.main.url(forResource: sound.fileName, withExtension: "wav") else {
-            print("사운드 파일을 찾을 수 없음: \(sound.fileName)")
-            playPlaceholderSound(for: sound)
+        // Swift Playground에서 리소스 찾기 (여러 방법 시도)
+        var soundURL: URL?
+
+        // 방법 1: Bundle.main에서 찾기 (Resources 서브디렉토리)
+        soundURL = Bundle.main.url(forResource: sound.fileName, withExtension: "wav", subdirectory: "Resources")
+
+        // 방법 2: Bundle.main에서 직접 찾기
+        if soundURL == nil {
+            soundURL = Bundle.main.url(forResource: sound.fileName, withExtension: "wav")
+        }
+
+        // 방법 3: 프로젝트 디렉토리에서 직접 찾기
+        if soundURL == nil {
+            let fileManager = FileManager.default
+            if let projectPath = Bundle.main.resourcePath {
+                let resourcesPath = (projectPath as NSString).appendingPathComponent("Resources")
+                let filePath = (resourcesPath as NSString).appendingPathComponent("\(sound.fileName).wav")
+
+                if fileManager.fileExists(atPath: filePath) {
+                    soundURL = URL(fileURLWithPath: filePath)
+                    print("✅ 방법 3으로 파일 찾음: \(filePath)")
+                }
+            }
+        }
+
+        guard let finalURL = soundURL else {
+            print("❌ 사운드 파일을 찾을 수 없음: \(sound.fileName).wav")
+            print("📁 Bundle path: \(Bundle.main.bundlePath)")
+            print("📁 Resource path: \(Bundle.main.resourcePath ?? "nil")")
             return
         }
 
+        print("✅ 사운드 파일 찾음: \(finalURL.path)")
+
         do {
-            let player = try AVAudioPlayer(contentsOf: soundURL)
-            player.isMeteringEnabled = true // 중요: 메터링 활성화
-            player.numberOfLoops = -1 // 무한 반복 재생
+            let player = try AVAudioPlayer(contentsOf: finalURL)
+            player.isMeteringEnabled = true // 메터링 활성화
+            player.numberOfLoops = -1 // 무한 반복 재생 🔁
             player.prepareToPlay()
             player.volume = 1.0
             player.play()
 
             audioPlayers[sound.position] = player
+            print("🎵 재생 시작: \(sound.fileName) (Loop: ♾️)")
         } catch {
-            print("오디오 재생 실패: \(error.localizedDescription)")
-            playPlaceholderSound(for: sound)
+            print("❌ 오디오 재생 실패: \(error.localizedDescription)")
         }
     }
 
@@ -77,49 +103,12 @@ class AudioManager: ObservableObject {
         return false
     }
 
-    // 실제 음원이 없을 때 사용할 임시 사운드
-    private func playPlaceholderSound(for sound: Sound) {
-        let systemSoundID: SystemSoundID
-        switch sound.category {
-        case .rhythm:
-            systemSoundID = 1103
-        case .percussion:
-            systemSoundID = 1104
-        case .melody:
-            systemSoundID = 1105
-        case .voice:
-            systemSoundID = 1106
-        case .base:
-            systemSoundID = 1107
-        }
-        AudioServicesPlaySystemSound(systemSoundID)
-
-        // 시스템 사운드용 시뮬레이션
-        simulateAmplitudeForSystemSound(at: sound.position, duration: sound.duration)
-    }
-
-    private func simulateAmplitudeForSystemSound(at position: Int, duration: Double) {
-        // 시스템 사운드의 진폭 시뮬레이션 (실제 오디오 파일이 없을 때)
-        let steps = 30
-        let stepDuration = duration / Double(steps)
-
-        for step in 0..<steps {
-            DispatchQueue.main.asyncAfter(deadline: .now() + stepDuration * Double(step)) { [weak self] in
-                // 감쇠하는 진폭 시뮬레이션
-                let progress = Float(step) / Float(steps)
-                let amplitude = (1.0 - progress) * Float.random(in: 0.6...0.9)
-                self?.currentAmplitudes[position] = amplitude
-            }
-        }
-
-        // 마지막에 0으로
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
-            self?.currentAmplitudes[position] = 0.0
-        }
-    }
 
     func stopSound(at position: Int) {
-        audioPlayers[position]?.stop()
+        if let player = audioPlayers[position] {
+            player.stop()
+            print("⏹️ 재생 정지: Position \(position)")
+        }
         audioPlayers.removeValue(forKey: position)
         currentAmplitudes[position] = 0.0
     }
