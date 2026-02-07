@@ -157,84 +157,100 @@ struct IntroView: View {
 
     private var hanjiDescriptionCard: some View {
         VStack(spacing: 16) {
-            Text("Korean traditional music offers deep rest through the art of ")
-                .font(.system(size: 15))
-                .foregroundColor(.white.opacity(0.85))
-            + Text("empty space")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundColor(GugakDesign.Colors.obangsaekYellow)
-            + Text(" and ")
-                .font(.system(size: 15))
-                .foregroundColor(.white.opacity(0.85))
-            + Text("harmony")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundColor(GugakDesign.Colors.obangsaekYellow)
-            + Text(". Meet ")
-                .font(.system(size: 15))
-                .foregroundColor(.white.opacity(0.85))
-            + Text("Gugak MIDI Pad")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundColor(GugakDesign.Colors.obangsaekYellow)
-            + Text(", your own healing sound completed with a ")
-                .font(.system(size: 15))
-                .foregroundColor(.white.opacity(0.85))
-            + Text("single touch")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundColor(GugakDesign.Colors.obangsaekYellow)
-            + Text(".")
-                .font(.system(size: 15))
-                .foregroundColor(.white.opacity(0.85))
+            hanjiDescriptionText
         }
         .multilineTextAlignment(.center)
         .lineSpacing(6)
         .padding(24)
-        .background(
-            ZStack {
-                // Hanji paper texture effect
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(Color.white.opacity(0.03))
+        .background(hanjiCardBackground)
+    }
 
-                RoundedRectangle(cornerRadius: 20)
-                    .stroke(
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                GugakDesign.Colors.obangsaekRed.opacity(0.3),
-                                GugakDesign.Colors.obangsaekBlue.opacity(0.3)
-                            ]),
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1.5
-                    )
+    private var hanjiDescriptionText: Text {
+        let part1 = Text("Korean traditional music offers deep rest through the art of ")
+            .font(.system(size: 15))
+            .foregroundColor(.white.opacity(0.85))
 
-                // Corner decorations
-                VStack {
-                    HStack {
-                        CornerDecoration()
-                            .stroke(GugakDesign.Colors.obangsaekRed, lineWidth: 2)
-                            .frame(width: 30, height: 30)
-                        Spacer()
-                        CornerDecoration()
-                            .stroke(GugakDesign.Colors.obangsaekBlue, lineWidth: 2)
-                            .frame(width: 30, height: 30)
-                            .scaleEffect(x: -1, y: 1)
-                    }
+        let part2 = Text("empty space")
+            .font(.system(size: 15, weight: .bold))
+            .foregroundColor(GugakDesign.Colors.obangsaekYellow)
+
+        let part3 = Text(" and ")
+            .font(.system(size: 15))
+            .foregroundColor(.white.opacity(0.85))
+
+        let part4 = Text("harmony")
+            .font(.system(size: 15, weight: .bold))
+            .foregroundColor(GugakDesign.Colors.obangsaekYellow)
+
+        let part5 = Text(". Meet ")
+            .font(.system(size: 15))
+            .foregroundColor(.white.opacity(0.85))
+
+        let part6 = Text("Gugak MIDI Pad")
+            .font(.system(size: 15, weight: .bold))
+            .foregroundColor(GugakDesign.Colors.obangsaekYellow)
+
+        let part7 = Text(", your own healing sound completed with a ")
+            .font(.system(size: 15))
+            .foregroundColor(.white.opacity(0.85))
+
+        let part8 = Text("single touch")
+            .font(.system(size: 15, weight: .bold))
+            .foregroundColor(GugakDesign.Colors.obangsaekYellow)
+
+        let part9 = Text(".")
+            .font(.system(size: 15))
+            .foregroundColor(.white.opacity(0.85))
+
+        return part1 + part2 + part3 + part4 + part5 + part6 + part7 + part8 + part9
+    }
+
+    private var hanjiCardBackground: some View {
+        ZStack {
+            // Hanji paper texture effect
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color.white.opacity(0.03))
+
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            GugakDesign.Colors.obangsaekRed.opacity(0.3),
+                            GugakDesign.Colors.obangsaekBlue.opacity(0.3)
+                        ]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1.5
+                )
+
+            // Corner decorations
+            VStack {
+                HStack {
+                    CornerDecoration()
+                        .stroke(GugakDesign.Colors.obangsaekRed, lineWidth: 2)
+                        .frame(width: 30, height: 30)
                     Spacer()
-                    HStack {
-                        CornerDecoration()
-                            .stroke(GugakDesign.Colors.obangsaekBlue, lineWidth: 2)
-                            .frame(width: 30, height: 30)
-                            .scaleEffect(x: 1, y: -1)
-                        Spacer()
-                        CornerDecoration()
-                            .stroke(GugakDesign.Colors.obangsaekRed, lineWidth: 2)
-                            .frame(width: 30, height: 30)
-                            .scaleEffect(x: -1, y: -1)
-                    }
+                    CornerDecoration()
+                        .stroke(GugakDesign.Colors.obangsaekBlue, lineWidth: 2)
+                        .frame(width: 30, height: 30)
+                        .scaleEffect(x: -1, y: 1)
                 }
-                .padding(8)
+                Spacer()
+                HStack {
+                    CornerDecoration()
+                        .stroke(GugakDesign.Colors.obangsaekBlue, lineWidth: 2)
+                        .frame(width: 30, height: 30)
+                        .scaleEffect(x: 1, y: -1)
+                    Spacer()
+                    CornerDecoration()
+                        .stroke(GugakDesign.Colors.obangsaekRed, lineWidth: 2)
+                        .frame(width: 30, height: 30)
+                        .scaleEffect(x: -1, y: -1)
+                }
             }
-        )
+            .padding(8)
+        }
     }
 
     // MARK: - Traditional Feature Card
