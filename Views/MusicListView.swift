@@ -3,18 +3,15 @@ import AVFoundation
 
 struct MusicListView: View {
     @EnvironmentObject var appState: AppState
-    @State private var playingMusic: RecordedMusic?
-    @State private var audioPlayer: AVAudioPlayer?
-    @State private var editingMusic: RecordedMusic?
-    @State private var newName: String = ""
+    @StateObject private var playbackManager = MusicPlaybackManager()
 
     var body: some View {
         ZStack {
-            Constants.Colors.background
+            GugakDesign.Colors.darkNight
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // 헤더
+                // Header
                 headerView
                     .padding(.horizontal, 20)
                     .padding(.top, 16)
@@ -28,10 +25,15 @@ struct MusicListView: View {
                             ForEach(appState.recordedMusics) { music in
                                 MusicCard(
                                     music: music,
-                                    isPlaying: playingMusic?.id == music.id,
-                                    onPlay: { playMusic(music) },
-                                    onStop: { stopMusic() },
-                                    onRename: { editingMusic = music; newName = music.name },
+                                    isPlaying: playbackManager.currentlyPlaying?.id == music.id,
+                                    currentTime: playbackManager.currentlyPlaying?.id == music.id ? playbackManager.currentTime : 0,
+                                    onTogglePlay: {
+                                        if playbackManager.currentlyPlaying?.id == music.id {
+                                            playbackManager.stop()
+                                        } else {
+                                            playbackManager.play(music)
+                                        }
+                                    },
                                     onDelete: { deleteMusic(music) }
                                 )
                             }
@@ -42,24 +44,12 @@ struct MusicListView: View {
                 }
             }
         }
-        .alert("이름 변경", isPresented: .constant(editingMusic != nil)) {
-            TextField("새 이름", text: $newName)
-            Button("취소", role: .cancel) {
-                editingMusic = nil
-            }
-            Button("확인") {
-                if let music = editingMusic {
-                    appState.renameRecordedMusic(music, newName: newName)
-                    editingMusic = nil
-                }
-            }
-        }
     }
 
     private var headerView: some View {
         HStack {
             Button(action: {
-                stopMusic()
+                playbackManager.stop()
                 appState.navigateTo(.main)
             }) {
                 Image(systemName: "arrow.left")
@@ -68,13 +58,13 @@ struct MusicListView: View {
                     .frame(width: 44, height: 44)
             }
 
-            Text("제작 음악")
+            Text("Recorded Music")
                 .font(.system(size: 28, weight: .bold))
                 .foregroundColor(.white)
 
             Spacer()
 
-            Text("\(appState.recordedMusics.count)곡")
+            Text("\(appState.recordedMusics.count) tracks")
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(.white.opacity(0.7))
         }
@@ -88,11 +78,11 @@ struct MusicListView: View {
                 .font(.system(size: 80))
                 .foregroundColor(.white.opacity(0.3))
 
-            Text("아직 녹음된 음악이 없습니다")
+            Text("No recordings yet")
                 .font(.system(size: 18, weight: .medium))
                 .foregroundColor(.white.opacity(0.7))
 
-            Text("메인 화면에서 음악을 만들고\n녹음 버튼을 눌러보세요")
+            Text("Create music on the main screen\nand press the record button")
                 .font(.system(size: 14))
                 .foregroundColor(.white.opacity(0.5))
                 .multilineTextAlignment(.center)
@@ -101,112 +91,226 @@ struct MusicListView: View {
         }
     }
 
-    private func playMusic(_ music: RecordedMusic) {
-        stopMusic()
-
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let audioURL = documentsPath.appendingPathComponent(music.fileName)
-
-        do {
-            audioPlayer = try AVAudioPlayer(contentsOf: audioURL)
-            audioPlayer?.play()
-            playingMusic = music
-
-            // 재생이 끝나면 자동으로 정지
-            DispatchQueue.main.asyncAfter(deadline: .now() + music.duration) { [weak audioPlayer] in
-                if audioPlayer?.isPlaying == false {
-                    self.playingMusic = nil
-                }
-            }
-        } catch {
-            print("오디오 재생 실패: \(error.localizedDescription)")
-        }
-    }
-
-    private func stopMusic() {
-        audioPlayer?.stop()
-        audioPlayer = nil
-        playingMusic = nil
-    }
-
     private func deleteMusic(_ music: RecordedMusic) {
-        if playingMusic?.id == music.id {
-            stopMusic()
+        if playbackManager.currentlyPlaying?.id == music.id {
+            playbackManager.stop()
         }
         appState.deleteRecordedMusic(music)
 
-        // 파일도 삭제
+        // Delete file
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let audioURL = documentsPath.appendingPathComponent(music.fileName)
         try? FileManager.default.removeItem(at: audioURL)
     }
 }
 
+// MARK: - Music Playback Manager
+
+@MainActor
+class MusicPlaybackManager: ObservableObject {
+    @Published var currentlyPlaying: RecordedMusic?
+    @Published var currentTime: TimeInterval = 0
+
+    private var audioPlayer: AVAudioPlayer?
+    private var displayLink: CADisplayLink?
+
+    func play(_ music: RecordedMusic) {
+        stop()
+
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let audioURL = documentsPath.appendingPathComponent(music.fileName)
+
+        do {
+            audioPlayer = try AVAudioPlayer(contentsOf: audioURL)
+            audioPlayer?.prepareToPlay()
+            audioPlayer?.play()
+            currentlyPlaying = music
+            currentTime = 0
+
+            startDisplayLink()
+        } catch {
+            print("❌ Playback failed: \(error.localizedDescription)")
+        }
+    }
+
+    func stop() {
+        audioPlayer?.stop()
+        audioPlayer = nil
+        currentlyPlaying = nil
+        currentTime = 0
+        stopDisplayLink()
+    }
+
+    private func startDisplayLink() {
+        displayLink = CADisplayLink(target: self, selector: #selector(updateProgress))
+        displayLink?.add(to: .main, forMode: .common)
+    }
+
+    private func stopDisplayLink() {
+        displayLink?.invalidate()
+        displayLink = nil
+    }
+
+    @objc private func updateProgress() {
+        guard let player = audioPlayer, player.isPlaying else {
+            stop()
+            return
+        }
+
+        currentTime = player.currentTime
+
+        // Auto-stop when finished
+        if currentTime >= player.duration {
+            stop()
+        }
+    }
+
+    deinit {
+        stopDisplayLink()
+    }
+}
+
+// MARK: - Music Card
+
 struct MusicCard: View {
     let music: RecordedMusic
     let isPlaying: Bool
-    let onPlay: () -> Void
-    let onStop: () -> Void
-    let onRename: () -> Void
+    let currentTime: TimeInterval
+    let onTogglePlay: () -> Void
     let onDelete: () -> Void
 
     @State private var showDeleteConfirmation = false
+    @State private var showShareSheet = false
+
+    private var progress: Double {
+        guard music.duration > 0 else { return 0 }
+        return min(currentTime / music.duration, 1.0)
+    }
+
+    private var fileURL: URL {
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        return documentsPath.appendingPathComponent(music.fileName)
+    }
 
     var body: some View {
-        HStack(spacing: 16) {
-            // 재생/정지 버튼
-            Button(action: {
-                if isPlaying {
-                    onStop()
-                } else {
-                    onPlay()
+        VStack(spacing: 12) {
+            HStack(spacing: 16) {
+                // Play/Stop Button
+                Button(action: onTogglePlay) {
+                    ZStack {
+                        Circle()
+                            .fill(isPlaying ? GugakDesign.Colors.obangsaekRed : Color.white.opacity(0.2))
+                            .frame(width: 50, height: 50)
+
+                        Image(systemName: isPlaying ? "stop.fill" : "play.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(.white)
+                            .offset(x: isPlaying ? 0 : 2)
+                    }
                 }
-            }) {
-                Image(systemName: isPlaying ? "stop.circle.fill" : "play.circle.fill")
-                    .font(.system(size: 44))
-                    .foregroundColor(isPlaying ? Constants.Colors.red : .white)
+
+                // Music Info
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(music.name)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+
+                    HStack(spacing: 8) {
+                        Image(systemName: "clock")
+                            .font(.system(size: 10))
+                        Text(isPlaying ? formatTime(currentTime) : music.formattedDuration)
+                            .font(.system(size: 12, design: .monospaced))
+                    }
+                    .foregroundColor(.white.opacity(0.6))
+                }
+
+                Spacer()
+
+                // Export Button
+                Button(action: { showShareSheet = true }) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 18))
+                        .foregroundColor(.white)
+                        .frame(width: 44, height: 44)
+                        .background(
+                            Circle()
+                                .fill(Color.white.opacity(0.1))
+                        )
+                }
+
+                // Delete Button
+                Button(action: { showDeleteConfirmation = true }) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 18))
+                        .foregroundColor(GugakDesign.Colors.obangsaekRed)
+                        .frame(width: 44, height: 44)
+                        .background(
+                            Circle()
+                                .fill(Color.white.opacity(0.1))
+                        )
+                }
             }
 
-            // 음악 정보
-            VStack(alignment: .leading, spacing: 6) {
-                Text(music.name)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
+            // Progress Bar
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    // Background
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.white.opacity(0.1))
+                        .frame(height: 6)
 
-                HStack(spacing: 12) {
-                    Label(music.formattedDuration, systemImage: "clock")
-                    Label(music.formattedDate, systemImage: "calendar")
+                    // Progress Fill
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    GugakDesign.Colors.obangsaekBlue,
+                                    GugakDesign.Colors.obangsaekRed
+                                ]),
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: geometry.size.width * progress, height: 6)
                 }
-                .font(.system(size: 12))
-                .foregroundColor(.white.opacity(0.6))
             }
-
-            Spacer()
-
-            // 메뉴 버튼
-            Menu {
-                Button(action: onRename) {
-                    Label("이름 변경", systemImage: "pencil")
-                }
-                Button(role: .destructive, action: { showDeleteConfirmation = true }) {
-                    Label("삭제", systemImage: "trash")
-                }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 20))
-                    .foregroundColor(.white)
-                    .frame(width: 44, height: 44)
-            }
+            .frame(height: 6)
         }
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Constants.Colors.cardBackground)
+                .fill(Color.white.opacity(0.05))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                )
         )
-        .confirmationDialog("이 음악을 삭제하시겠습니까?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
-            Button("삭제", role: .destructive, action: onDelete)
-            Button("취소", role: .cancel) {}
+        .confirmationDialog("Delete this recording?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
+            Button("Delete", role: .destructive, action: onDelete)
+            Button("Cancel", role: .cancel) {}
+        }
+        .sheet(isPresented: $showShareSheet) {
+            ShareSheet(items: [fileURL])
         }
     }
+
+    private func formatTime(_ time: TimeInterval) -> String {
+        let minutes = Int(time) / 60
+        let seconds = Int(time) % 60
+        return String(format: "%02d:%02d", minutes, seconds)
+    }
+}
+
+// MARK: - Share Sheet
+
+struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }

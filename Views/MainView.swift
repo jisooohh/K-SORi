@@ -2,12 +2,13 @@ import SwiftUI
 
 struct MainView: View {
     @EnvironmentObject var appState: AppState
-    @StateObject private var audioManager = AudioManager()
+    @StateObject private var beatEngine = BeatEngine(bpm: 120.0)
+    @StateObject private var audioPlayerManager = AudioPlayerManager()
     @StateObject private var hapticManager = HapticManager()
     @StateObject private var recordingManager = RecordingManager()
 
     @State private var activePads: Set<Int> = []
-    @State private var isPlaying = false
+    @State private var pendingPads: Set<Int> = []
 
     var body: some View {
         ZStack {
@@ -36,11 +37,21 @@ struct MainView: View {
                 GiwaPadGrid(
                     sounds: appState.soundPad.sounds,
                     activePads: $activePads,
+                    pendingPads: $pendingPads,
                     onPadTapped: handlePadTapped
                 )
                 .padding(.horizontal, GugakDesign.Spacing.sm)
 
                 Spacer(minLength: GugakDesign.Spacing.md)
+            }
+        }
+        .onAppear {
+            // Connect BeatEngine to AudioPlayerManager
+            audioPlayerManager.setBeatEngine(beatEngine)
+
+            // Start BeatEngine for quantization
+            if !beatEngine.isRunning {
+                beatEngine.start()
             }
         }
     }
@@ -82,19 +93,24 @@ struct MainView: View {
 
             // Transport Controls
             HStack(spacing: 12) {
-                // Record Button
+                // Record Button (with glow effect when recording)
                 Button(action: toggleRecording) {
                     Circle()
-                        .fill(recordingManager.isRecording ? Color.red : Color.red.opacity(0.6))
+                        .fill(Color.red)
                         .frame(width: 32, height: 32)
                         .overlay(
                             Circle()
                                 .stroke(Color.white.opacity(0.3), lineWidth: 1)
                         )
+                        .shadow(
+                            color: recordingManager.isRecording ? Color.red.opacity(0.8) : .clear,
+                            radius: recordingManager.isRecording ? 12 : 0
+                        )
+                        .opacity(recordingManager.isRecording ? 1.0 : 0.6)
                 }
 
                 // Stop Button
-                Button(action: stopPlayback) {
+                Button(action: stopAll) {
                     RoundedRectangle(cornerRadius: 4)
                         .fill(Color.gray.opacity(0.6))
                         .frame(width: 28, height: 28)
@@ -102,20 +118,6 @@ struct MainView: View {
                             RoundedRectangle(cornerRadius: 4)
                                 .stroke(Color.white.opacity(0.3), lineWidth: 1)
                         )
-                }
-
-                // Play Button
-                Button(action: togglePlayback) {
-                    ZStack {
-                        Circle()
-                            .fill(isPlaying ? Color.green : Color.green.opacity(0.6))
-                            .frame(width: 32, height: 32)
-
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 12))
-                            .foregroundColor(.white)
-                            .offset(x: 1)
-                    }
                 }
             }
 
@@ -146,9 +148,9 @@ struct MainView: View {
                 .padding(.leading, 4)
 
             WaveVisualizationView(
-                amplitudes: audioManager.currentAmplitudes,
-                frequencyBands: audioManager.frequencyBands,
-                globalAmplitude: audioManager.globalAmplitude
+                amplitudes: audioPlayerManager.currentAmplitudes,
+                frequencyBands: audioPlayerManager.frequencyBands,
+                globalAmplitude: audioPlayerManager.globalAmplitude
             )
             .frame(height: 120)
             .padding(GugakDesign.Spacing.md)
@@ -159,15 +161,26 @@ struct MainView: View {
     // MARK: - Actions
 
     private func handlePadTapped(_ sound: Sound) {
-        // Toggle 방식: 재생 중이면 정지, 정지 중이면 재생
-        audioManager.toggleSound(sound)
+        // Quantized toggle: waits for next beat before starting
+        audioPlayerManager.toggleSoundQuantized(sound)
         hapticManager.playHaptic(for: sound.category)
 
-        // activePads 상태 업데이트
-        if audioManager.isPlaying(at: sound.position) {
-            activePads.insert(sound.position)
-        } else {
+        // Update pad states
+        if audioPlayerManager.isPlaying(at: sound.position) {
+            // Already playing - will stop immediately
             activePads.remove(sound.position)
+            pendingPads.remove(sound.position)
+        } else if audioPlayerManager.isPending(at: sound.position) {
+            // Waiting for quantization
+            pendingPads.insert(sound.position)
+        } else {
+            // Check after a short delay if it started playing
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                if audioPlayerManager.isPlaying(at: sound.position) {
+                    activePads.insert(sound.position)
+                    pendingPads.remove(sound.position)
+                }
+            }
         }
     }
 
@@ -182,15 +195,18 @@ struct MainView: View {
         hapticManager.playSimpleHaptic()
     }
 
-    private func stopPlayback() {
-        audioManager.stopAllSounds()
-        activePads.removeAll()
-        isPlaying = false
-        hapticManager.playSimpleHaptic()
-    }
+    private func stopAll() {
+        // Stop recording if active
+        if recordingManager.isRecording {
+            if let music = recordingManager.stopRecording() {
+                appState.addRecordedMusic(music)
+            }
+        }
 
-    private func togglePlayback() {
-        isPlaying.toggle()
+        // Stop all pad sounds
+        audioPlayerManager.stopAllSounds()
+        activePads.removeAll()
+        pendingPads.removeAll()
         hapticManager.playSimpleHaptic()
     }
 
@@ -207,6 +223,7 @@ struct MainView: View {
 struct GiwaPadGrid: View {
     let sounds: [Sound]
     @Binding var activePads: Set<Int>
+    @Binding var pendingPads: Set<Int>
     let onPadTapped: (Sound) -> Void
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 5)
@@ -217,6 +234,7 @@ struct GiwaPadGrid: View {
                 GiwaPadButton(
                     sound: sound,
                     isActive: activePads.contains(sound.position),
+                    isPending: pendingPads.contains(sound.position),
                     onTap: {
                         onPadTapped(sound)
                     }
@@ -231,7 +249,10 @@ struct GiwaPadGrid: View {
 struct GiwaPadButton: View {
     let sound: Sound
     let isActive: Bool
+    let isPending: Bool
     let onTap: () -> Void
+
+    @State private var pulseAnimation: Bool = false
 
     // Obangsaek color for this button (based on position)
     private var buttonColor: Color {
@@ -256,11 +277,35 @@ struct GiwaPadButton: View {
                                 ? .black.opacity(0.15)
                                 : .white.opacity(0.15)
                         )
+
+                    // Pending indicator (pulsing ring)
+                    if isPending {
+                        Circle()
+                            .stroke(Color.yellow, lineWidth: 3)
+                            .scaleEffect(pulseAnimation ? 1.1 : 0.9)
+                            .opacity(pulseAnimation ? 0.3 : 0.8)
+                    }
                 }
             }
             .buttonStyle(GiwaButtonStyle(color: buttonColor, isActive: isActive))
             .frame(width: geometry.size.width, height: geometry.size.width)
         }
         .aspectRatio(1, contentMode: .fit)
+        .onAppear {
+            if isPending {
+                withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
+                    pulseAnimation = true
+                }
+            }
+        }
+        .onChange(of: isPending) { newValue in
+            if newValue {
+                withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
+                    pulseAnimation = true
+                }
+            } else {
+                pulseAnimation = false
+            }
+        }
     }
 }
