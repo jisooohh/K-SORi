@@ -165,8 +165,9 @@ class MusicPlaybackManager: ObservableObject {
         }
     }
 
-    deinit {
-        stopDisplayLink()
+    nonisolated deinit {
+        // Invalidate on deinit - safe from any context
+        displayLink?.invalidate()
     }
 }
 
