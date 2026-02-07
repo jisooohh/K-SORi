@@ -13,9 +13,8 @@ struct WaveVisualizationView: View {
                 let now = timeline.date.timeIntervalSinceReferenceDate
                 phase = now
 
-                // Draw multiple visualization layers
+                // Draw visualization layers (removed frequency bars)
                 drawCircularWave(context: context, size: size)
-                drawFrequencyBars(context: context, size: size)
                 drawWaveform(context: context, size: size)
                 drawParticles(context: context, size: size)
             }
@@ -59,54 +58,6 @@ struct WaveVisualizationView: View {
         }
     }
 
-    // MARK: - Frequency Bars (주파수 바)
-
-    private func drawFrequencyBars(context: GraphicsContext, size: CGSize) {
-        let barCount = frequencyBands.count
-        let barWidth = size.width / CGFloat(barCount * 2)
-        let spacing = barWidth * 0.3
-
-        for i in 0..<barCount {
-            let amplitude = CGFloat(frequencyBands[i])
-            let barHeight = amplitude * size.height * 0.7
-
-            let x = CGFloat(i) * (barWidth + spacing) + spacing
-            let y = size.height - barHeight
-
-            // Bar rectangle
-            let barRect = CGRect(
-                x: x,
-                y: y,
-                width: barWidth,
-                height: barHeight
-            )
-
-            // Gradient from purple to blue
-            let gradientStart = GugakDesign.Colors.waveGradientPurple
-            let gradientEnd = GugakDesign.Colors.waveGradientBlue
-
-            // Simulate gradient with opacity layers
-            context.fill(
-                Path(roundedRect: barRect, cornerRadius: barWidth / 4),
-                with: .color(gradientStart.opacity(0.7))
-            )
-
-            // Glow at top
-            let glowRect = CGRect(
-                x: x,
-                y: y,
-                width: barWidth,
-                height: min(barHeight, 10)
-            )
-
-            var glowContext = context
-            glowContext.addFilter(.blur(radius: 8))
-            glowContext.fill(
-                Path(roundedRect: glowRect, cornerRadius: barWidth / 4),
-                with: .color(gradientEnd.opacity(0.9))
-            )
-        }
-    }
 
     // MARK: - Waveform (파형)
 
@@ -119,38 +70,45 @@ struct WaveVisualizationView: View {
             ? 0.0
             : activeAmplitudes.reduce(0.0, +) / Float(activeAmplitudes.count)
 
-        // Create flowing waveform
-        for layerIndex in 0..<2 {
-            let layerOffset = Double(layerIndex) * 0.5
-            let layerAmplitude = CGFloat(averageAmplitude) * (1.0 - CGFloat(layerIndex) * 0.3)
+        // Enhanced amplitude for more visible waves
+        let enhancedAmplitude = averageAmplitude * 1.5 + 0.2
+
+        // Create multiple dense waveform layers
+        for layerIndex in 0..<4 {
+            let layerOffset = Double(layerIndex) * 0.3
+            let layerAmplitude = CGFloat(enhancedAmplitude) * (1.0 - CGFloat(layerIndex) * 0.2)
+
+            // Higher frequency for denser waves (increased from 2.0)
+            let baseFrequency = 5.0 + Double(layerIndex) * 1.5
 
             let path = createFlowingWavePath(
                 width: size.width,
-                centerY: centerY,
+                centerY: centerY + CGFloat(layerIndex - 2) * 8, // Spread vertically
                 amplitude: layerAmplitude,
                 phase: phase + layerOffset,
-                frequency: 2.0 + Double(layerIndex) * 0.5
+                frequency: baseFrequency
             )
 
-            let color = layerIndex == 0
+            // Alternate colors for depth
+            let color = layerIndex % 2 == 0
                 ? GugakDesign.Colors.waveGradientBlue
                 : GugakDesign.Colors.waveGradientPurple
 
-            let opacity = 0.5 - Double(layerIndex) * 0.15
+            let opacity = 0.6 - Double(layerIndex) * 0.12
 
             context.stroke(
                 path,
                 with: .color(color.opacity(opacity)),
-                lineWidth: 3.0
+                lineWidth: 2.5
             )
 
-            // Glow
+            // Glow effect
             var blurredContext = context
-            blurredContext.addFilter(.blur(radius: 10))
+            blurredContext.addFilter(.blur(radius: 8))
             blurredContext.stroke(
                 path,
-                with: .color(color.opacity(opacity * 0.4)),
-                lineWidth: 6.0
+                with: .color(color.opacity(opacity * 0.3)),
+                lineWidth: 5.0
             )
         }
     }
@@ -163,26 +121,28 @@ struct WaveVisualizationView: View {
         frequency: Double
     ) -> Path {
         var path = Path()
-        let stepCount = 200
+        let stepCount = 300 // Increased for smoother waves
         let step = width / CGFloat(stepCount)
 
         for i in 0...stepCount {
             let x = CGFloat(i) * step
             let normalizedX = x / width
 
-            // Multiple sine waves for complex motion
-            let angle1 = normalizedX * frequency * 2 * .pi + phase
-            let angle2 = normalizedX * frequency * 1.5 * .pi - phase * 0.7
+            // Multiple sine waves for complex rhythmic motion
+            let angle1 = normalizedX * frequency * 2 * .pi + phase * 1.5
+            let angle2 = normalizedX * frequency * 1.3 * .pi - phase * 0.9
+            let angle3 = normalizedX * frequency * 2.5 * .pi + phase * 0.6
 
             let wave1 = sin(angle1)
-            let wave2 = sin(angle2) * 0.5
+            let wave2 = sin(angle2) * 0.4
+            let wave3 = sin(angle3) * 0.25
 
-            let combinedWave = (wave1 + wave2) / 1.5
+            let combinedWave = (wave1 + wave2 + wave3) / 1.65
 
-            // Envelope
-            let envelope = 1.0 - abs(normalizedX - 0.5) * 0.5
+            // Envelope for natural fade at edges
+            let envelope = 1.0 - pow(abs(normalizedX - 0.5) * 2, 1.5) * 0.4
 
-            let y = centerY + combinedWave * amplitude * envelope * 40
+            let y = centerY + combinedWave * amplitude * envelope * 35
 
             if i == 0 {
                 path.move(to: CGPoint(x: x, y: y))
