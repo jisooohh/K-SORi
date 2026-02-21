@@ -236,7 +236,7 @@ struct InstrumentDisplayView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 130)
+        .frame(height: 150)
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .glassmorphism()
@@ -247,12 +247,12 @@ struct InstrumentColumn: View {
     let category: Constants.SoundCategory
     let activeCount: Int
 
-    // 컨테이너 110pt / 악기 VStack 72pt
-    // 비활성: offset +34 → 하단 ~20% 클리핑
+    // 컨테이너 128pt / 악기 이미지 90pt
+    // 비활성: offset +37 → 하단 ~20% 클리핑
     // 활성:   offset  0  → 중앙 배치
-    private let containerH: CGFloat   = 110
-    private let instrumentH: CGFloat  = 72
-    private let inactiveOffset: CGFloat = 34
+    private let containerH: CGFloat    = 128
+    private let instrumentH: CGFloat   = 90
+    private let inactiveOffset: CGFloat = 37
 
     private var level: Int  { min(activeCount, 6) }
     private var isActive: Bool { activeCount > 0 }
@@ -262,33 +262,20 @@ struct InstrumentColumn: View {
     private var saturationAdj: Double { 0.25 + Double(level) * 0.125 }
     private var glowRadius: CGFloat   { level >= 4 ? CGFloat(level - 3) * 6 : 0 }
 
-    // 레이블 색: 어두운 금색 → 흰색
-    private var labelColor: Color {
-        let t = Double(level) / 6.0
-        return Color(red: 0.55 + 0.45*t, green: 0.40 + 0.60*t, blue: 0.05 + 0.95*t)
-    }
-
     var body: some View {
         ZStack {
-            VStack(spacing: 4) {
-                InstrumentImage(name: category.instrumentImageName)
-                    .scaledToFit()
-                    .frame(height: 54)
-                    .brightness(brightnessAdj)
-                    .saturation(saturationAdj)
-                    .shadow(
-                        color: level >= 4 ? Color.white.opacity(0.75) : .clear,
-                        radius: glowRadius
-                    )
-
-                Text(category.instrumentName)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(labelColor)
-            }
-            .frame(height: instrumentH)
-            .offset(y: isActive ? 0 : inactiveOffset)
-            .animation(.spring(response: 0.45, dampingFraction: 0.72), value: isActive)
-            .animation(.easeInOut(duration: 0.2), value: level)
+            InstrumentImage(name: category.instrumentImageName)
+                .scaledToFit()
+                .frame(height: instrumentH)
+                .brightness(brightnessAdj)
+                .saturation(saturationAdj)
+                .shadow(
+                    color: level >= 4 ? Color.white.opacity(0.75) : .clear,
+                    radius: glowRadius
+                )
+                .offset(y: isActive ? 0 : inactiveOffset)
+                .animation(.spring(response: 0.45, dampingFraction: 0.72), value: isActive)
+                .animation(.easeInOut(duration: 0.2), value: level)
         }
         .frame(maxWidth: .infinity)
         .frame(height: containerH)
@@ -360,27 +347,13 @@ struct KSORiPadButton: View {
                     // 악기 실제 이미지
                     InstrumentImage(name: sound.category.instrumentImageName)
                         .scaledToFit()
-                        .frame(width: size * 0.58, height: size * 0.58)
+                        .frame(width: size * 0.78, height: size * 0.78)
                         .brightness(isActive ? 0.12 : -0.18)
                         .saturation(isActive ? 1.25 : 0.55)
                         .shadow(
                             color: isActive ? categoryColor.opacity(0.85) : .clear,
                             radius: isActive ? 8 : 0
                         )
-
-                    // 카테고리 레이블 (하단)
-                    VStack {
-                        Spacer()
-                        Text(sound.category.categoryLetter)
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .foregroundStyle(
-                                (sound.category == .voice
-                                    ? Color.black
-                                    : Color.white)
-                                .opacity(isActive ? 0.65 : 0.45)
-                            )
-                            .padding(.bottom, 4)
-                    }
 
                     // 퀀타이즈 대기 링
                     if isPending {
