@@ -54,14 +54,14 @@ enum Constants {
             }
         }
 
-        // 대표 악기 SF Symbol
-        var instrumentSymbol: String {
+        // 대표 악기 이미지 파일명 (Resources/)
+        var instrumentImageName: String {
             switch self {
-            case .melody:     return "music.note"
-            case .percussion: return "circle.fill"
-            case .rhythm:     return "hourglass"
-            case .voice:      return "fan.fill"
-            case .base:       return "guitars"
+            case .melody:     return "instrument_haegeum"
+            case .percussion: return "instrument_soribuk"
+            case .rhythm:     return "instrument_janggu"
+            case .voice:      return "instrument_buchae"
+            case .base:       return "instrument_geomungo"
             }
         }
 

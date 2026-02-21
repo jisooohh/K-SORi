@@ -1,20 +1,17 @@
 import SwiftUI
+import UIKit
 
 struct MainView: View {
     @EnvironmentObject var appState: AppState
-    @StateObject private var beatEngine      = BeatEngine(bpm: 120.0)
+    @StateObject private var beatEngine       = BeatEngine(bpm: 120.0)
     @StateObject private var audioPlayerManager = AudioPlayerManager()
-    @StateObject private var hapticManager   = HapticManager()
+    @StateObject private var hapticManager    = HapticManager()
     @StateObject private var recordingManager = RecordingManager()
 
-    // 현재 재생 중인 패드
-    @State private var activePads: Set<Int> = []
-    // 퀀타이즈 대기 중인 패드
-    @State private var pendingPads: Set<Int> = []
-    // 0.5초 딜레이 후 정지 예약된 패드
+    @State private var activePads:      Set<Int> = []
+    @State private var pendingPads:     Set<Int> = []
     @State private var pendingStopPads: Set<Int> = []
 
-    // 카테고리별 활성 버튼 수 (디스플레이 밝기 계산용)
     private var categoryActiveCounts: [Constants.SoundCategory: Int] {
         var counts: [Constants.SoundCategory: Int] = [:]
         for position in activePads {
@@ -34,11 +31,9 @@ struct MainView: View {
                     .padding(.horizontal, GugakDesign.Spacing.md)
                     .padding(.top, GugakDesign.Spacing.md)
 
-                // 악기 디스플레이 (Wave Visualizer 대체)
                 InstrumentDisplayView(categoryActiveCounts: categoryActiveCounts)
                     .padding(.horizontal, GugakDesign.Spacing.md)
 
-                // 패드 그리드
                 KSORiPadGrid(
                     sounds: appState.soundPad.sounds,
                     activePads: $activePads,
@@ -122,11 +117,9 @@ struct MainView: View {
         let pos = sound.position
 
         if pendingStopPads.contains(pos) {
-            // 정지 예약 취소 → 계속 재생
             pendingStopPads.remove(pos)
 
         } else if activePads.contains(pos) {
-            // 두 번째 클릭 → 0.5초 후 정지
             pendingStopPads.insert(pos)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 guard pendingStopPads.contains(pos) else { return }
@@ -136,12 +129,10 @@ struct MainView: View {
             }
 
         } else if pendingPads.contains(pos) {
-            // 퀀타이즈 대기 중 재탭 → 시작 취소
             audioPlayerManager.stopSound(at: pos)
             pendingPads.remove(pos)
 
         } else {
-            // 첫 번째 클릭 → 소리 시작
             audioPlayerManager.toggleSoundQuantized(sound)
             hapticManager.playHaptic(for: sound.category)
             pendingPads.insert(pos)
@@ -149,12 +140,8 @@ struct MainView: View {
         }
     }
 
-    // 퀀타이즈 시작 후 재생 여부 확인 (최대 8회 폴링)
     private func pollForActivation(_ sound: Sound, attempt: Int = 0) {
-        guard attempt < 8 else {
-            pendingPads.remove(sound.position)
-            return
-        }
+        guard attempt < 8 else { pendingPads.remove(sound.position); return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             if audioPlayerManager.isPlaying(at: sound.position) {
                 activePads.insert(sound.position)
@@ -165,26 +152,18 @@ struct MainView: View {
         }
     }
 
-    // MARK: - Recording
-
     private func toggleRecording() {
         if recordingManager.isRecording {
-            if let music = recordingManager.stopRecording() {
-                appState.addRecordedMusic(music)
-            }
+            if let music = recordingManager.stopRecording() { appState.addRecordedMusic(music) }
         } else {
             _ = recordingManager.startRecording()
         }
         hapticManager.playSimpleHaptic()
     }
 
-    // MARK: - Stop All
-
     private func stopAll() {
         if recordingManager.isRecording {
-            if let music = recordingManager.stopRecording() {
-                appState.addRecordedMusic(music)
-            }
+            if let music = recordingManager.stopRecording() { appState.addRecordedMusic(music) }
         }
         audioPlayerManager.stopAllSounds()
         activePads.removeAll()
@@ -194,18 +173,52 @@ struct MainView: View {
     }
 
     private func formatDuration(_ duration: TimeInterval) -> String {
-        let h = Int(duration) / 3600
-        let m = (Int(duration) % 3600) / 60
-        let s = Int(duration) % 60
-        return String(format: "%02d:%02d:%02d", h, m, s)
+        String(format: "%02d:%02d:%02d", Int(duration)/3600, (Int(duration)%3600)/60, Int(duration)%60)
+    }
+}
+
+// MARK: - Bundle Image Loader
+
+/// Resources 폴더에서 PNG를 안정적으로 로드하는 헬퍼 뷰
+struct InstrumentImage: View {
+    let name: String
+
+    private var uiImage: UIImage? {
+        // 방법 1: UIImage(named:)
+        if let img = UIImage(named: name) { return img }
+
+        // 방법 2: Bundle Resources 서브디렉토리
+        if let url = Bundle.main.url(forResource: name, withExtension: "png", subdirectory: "Resources"),
+           let img = UIImage(contentsOfFile: url.path) { return img }
+
+        // 방법 3: Bundle 직접
+        if let url = Bundle.main.url(forResource: name, withExtension: "png"),
+           let img = UIImage(contentsOfFile: url.path) { return img }
+
+        // 방법 4: resourcePath 경로 순회
+        if let base = Bundle.main.resourcePath {
+            for suffix in ["Resources/\(name).png", "\(name).png"] {
+                let path = (base as NSString).appendingPathComponent(suffix)
+                if let img = UIImage(contentsOfFile: path) { return img }
+            }
+        }
+        return nil
+    }
+
+    var body: some View {
+        if let img = uiImage {
+            Image(uiImage: img).resizable()
+        } else {
+            Image(systemName: "music.note").resizable()
+        }
     }
 }
 
 // MARK: - Instrument Display
 
 /// 5가지 악기 이미지 행
-/// - 초기 상태: 악기 하단 20%가 클리핑으로 숨겨짐 (어두운 노란색)
-/// - 버튼 클릭 시: 해당 악기가 중앙으로 상승 + 밝기 증가 (최대 6단계 → white + glow)
+/// - 비활성: 하단 ~20% 클리핑, 어두운 금색
+/// - 활성: 중앙으로 상승 + 밝기/채도 증가 (6단계)
 struct InstrumentDisplayView: View {
     let categoryActiveCounts: [Constants.SoundCategory: Int]
 
@@ -234,49 +247,48 @@ struct InstrumentColumn: View {
     let category: Constants.SoundCategory
     let activeCount: Int
 
-    // 컨테이너: 110pt / 악기 VStack: 72pt
-    // 비활성 시 → offset +34 → 하단 ~20%가 클리핑됨
-    // 활성 시  → offset  0  → 중앙 배치
-    private let containerH: CGFloat = 110
-    private let instrumentH: CGFloat = 72
+    // 컨테이너 110pt / 악기 VStack 72pt
+    // 비활성: offset +34 → 하단 ~20% 클리핑
+    // 활성:   offset  0  → 중앙 배치
+    private let containerH: CGFloat   = 110
+    private let instrumentH: CGFloat  = 72
     private let inactiveOffset: CGFloat = 34
 
-    private var level: Int { min(activeCount, 6) }
+    private var level: Int  { min(activeCount, 6) }
     private var isActive: Bool { activeCount > 0 }
 
-    // 어두운 노란색(level 0) → 흰색(level 6) 보간
-    private var instrumentColor: Color {
-        let t = Double(level) / 6.0
-        return Color(
-            red:   0.55 + 0.45 * t,
-            green: 0.40 + 0.60 * t,
-            blue:  0.05 + 0.95 * t
-        )
-    }
+    // level 0 = 어두운 금색(-0.3 brightness), level 6 = 밝은 흰빛(+0.45)
+    private var brightnessAdj: Double { Double(level) * 0.125 - 0.3 }
+    private var saturationAdj: Double { 0.25 + Double(level) * 0.125 }
+    private var glowRadius: CGFloat   { level >= 4 ? CGFloat(level - 3) * 6 : 0 }
 
-    private var glowRadius: CGFloat {
-        level >= 4 ? CGFloat(level - 3) * 5 : 0
+    // 레이블 색: 어두운 금색 → 흰색
+    private var labelColor: Color {
+        let t = Double(level) / 6.0
+        return Color(red: 0.55 + 0.45*t, green: 0.40 + 0.60*t, blue: 0.05 + 0.95*t)
     }
 
     var body: some View {
         ZStack {
             VStack(spacing: 4) {
-                Image(systemName: category.instrumentSymbol)
-                    .font(.system(size: 40, weight: .regular))
-                    .foregroundStyle(instrumentColor)
+                InstrumentImage(name: category.instrumentImageName)
+                    .scaledToFit()
+                    .frame(height: 54)
+                    .brightness(brightnessAdj)
+                    .saturation(saturationAdj)
                     .shadow(
-                        color: level >= 4 ? instrumentColor.opacity(0.9) : .clear,
+                        color: level >= 4 ? Color.white.opacity(0.75) : .clear,
                         radius: glowRadius
                     )
 
                 Text(category.instrumentName)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(instrumentColor.opacity(0.9))
+                    .foregroundStyle(labelColor)
             }
             .frame(height: instrumentH)
             .offset(y: isActive ? 0 : inactiveOffset)
             .animation(.spring(response: 0.45, dampingFraction: 0.72), value: isActive)
-            .animation(.easeInOut(duration: 0.25), value: level)
+            .animation(.easeInOut(duration: 0.2), value: level)
         }
         .frame(maxWidth: .infinity)
         .frame(height: containerH)
@@ -288,7 +300,7 @@ struct InstrumentColumn: View {
 
 struct KSORiPadGrid: View {
     let sounds: [Sound]
-    @Binding var activePads: Set<Int>
+    @Binding var activePads:  Set<Int>
     @Binding var pendingPads: Set<Int>
     let onPadTapped: (Sound) -> Void
 
@@ -299,7 +311,7 @@ struct KSORiPadGrid: View {
             ForEach(sounds) { sound in
                 KSORiPadButton(
                     sound: sound,
-                    isActive: activePads.contains(sound.position),
+                    isActive:  activePads.contains(sound.position),
                     isPending: pendingPads.contains(sound.position),
                     onTap: { onPadTapped(sound) }
                 )
@@ -312,7 +324,7 @@ struct KSORiPadGrid: View {
 
 struct KSORiPadButton: View {
     let sound: Sound
-    let isActive: Bool
+    let isActive:  Bool
     let isPending: Bool
     let onTap: () -> Void
 
@@ -320,25 +332,20 @@ struct KSORiPadButton: View {
 
     private var categoryColor: Color { sound.category.color }
 
-    // 흰색(voice) 버튼은 아이콘을 검정으로
-    private var iconColor: Color {
-        sound.category == .voice
-            ? Color.black.opacity(isActive ? 0.85 : 0.55)
-            : Color.white.opacity(isActive ? 1.0 : 0.65)
-    }
-
     var body: some View {
         GeometryReader { geo in
+            let size = geo.size.width
+
             Button(action: onTap) {
                 ZStack {
                     // 배경
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(categoryColor.opacity(isActive ? 0.9 : 0.35))
+                        .fill(categoryColor.opacity(isActive ? 0.88 : 0.30))
 
                     // 외부 글로우 (활성 시)
                     if isActive {
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(categoryColor.opacity(0.45))
+                            .fill(categoryColor.opacity(0.5))
                             .blur(radius: 10)
                             .scaleEffect(1.08)
                     }
@@ -346,29 +353,36 @@ struct KSORiPadButton: View {
                     // 테두리
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(
-                            categoryColor.opacity(isActive ? 0.95 : 0.4),
+                            categoryColor.opacity(isActive ? 0.95 : 0.38),
                             lineWidth: isActive ? 2 : 1
                         )
 
-                    // 악기 아이콘 (확대)
-                    Image(systemName: sound.category.instrumentSymbol)
-                        .font(.system(size: 30, weight: .regular))
-                        .foregroundStyle(iconColor)
+                    // 악기 실제 이미지
+                    InstrumentImage(name: sound.category.instrumentImageName)
+                        .scaledToFit()
+                        .frame(width: size * 0.58, height: size * 0.58)
+                        .brightness(isActive ? 0.12 : -0.18)
+                        .saturation(isActive ? 1.25 : 0.55)
                         .shadow(
-                            color: isActive ? categoryColor.opacity(0.7) : .clear,
-                            radius: isActive ? 6 : 0
+                            color: isActive ? categoryColor.opacity(0.85) : .clear,
+                            radius: isActive ? 8 : 0
                         )
 
-                    // 카테고리 레이블 (하단 소문자)
+                    // 카테고리 레이블 (하단)
                     VStack {
                         Spacer()
                         Text(sound.category.categoryLetter)
                             .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .foregroundStyle(iconColor.opacity(0.55))
+                            .foregroundStyle(
+                                (sound.category == .voice
+                                    ? Color.black
+                                    : Color.white)
+                                .opacity(isActive ? 0.65 : 0.45)
+                            )
                             .padding(.bottom, 4)
                     }
 
-                    // 퀀타이즈 대기 링 (박자 동기화 대기 중)
+                    // 퀀타이즈 대기 링
                     if isPending {
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(Color.yellow.opacity(0.9), lineWidth: 2.5)
@@ -378,7 +392,7 @@ struct KSORiPadButton: View {
                 }
             }
             .buttonStyle(KSORiButtonStyle())
-            .frame(width: geo.size.width, height: geo.size.width)
+            .frame(width: size, height: size)
         }
         .aspectRatio(1, contentMode: .fit)
         .onAppear { if isPending { startPulse() } }
