@@ -236,7 +236,7 @@ struct InstrumentDisplayView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 200)
+        .frame(height: 180)
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .glassmorphism()
@@ -247,12 +247,12 @@ struct InstrumentColumn: View {
     let category: Constants.SoundCategory
     let activeCount: Int
 
-    // 컨테이너 180pt / 악기 이미지 173pt (115 × 1.5)
-    // 비활성: offset +38 → 하단 ~20% 클리핑
+    // 컨테이너 162pt / 악기 이미지 155pt (173 × 0.9)
+    // 비활성: offset +35 → 하단 ~20% 클리핑
     // 활성:   offset  0  → 중앙 배치
-    private let containerH: CGFloat    = 180
-    private let instrumentH: CGFloat   = 173
-    private let inactiveOffset: CGFloat = 38
+    private let containerH: CGFloat    = 162
+    private let instrumentH: CGFloat   = 155
+    private let inactiveOffset: CGFloat = 35
 
     private var level: Int  { min(activeCount, 6) }
     private var isActive: Bool { activeCount > 0 }
@@ -319,11 +319,13 @@ struct KSORiPadButton: View {
 
     private var categoryColor: Color { sound.category.color }
 
-    // 글로우 색상: 검정(base)은 밝은 회색(검정의 빛나는 버전)으로 가시성 확보
-    // 다른 버튼과 동일한 구조 — 아웃라인 없음
-    private var glowColor: Color {
+    // 활성 시 표시 색상:
+    // - 검정(base): 밝은 회색(균일하게 높아진 채도+밝기) → 버튼 전체 fill에 사용
+    // - 나머지: categoryColor 그대로
+    // glow도 같은 색을 사용해 "흰색 섞인" 느낌 없이 균일하게 보임
+    private var activeDisplayColor: Color {
         sound.category == .base
-            ? Color(red: 0.58, green: 0.58, blue: 0.62)
+            ? Color(red: 0.42, green: 0.42, blue: 0.46)
             : categoryColor
     }
 
@@ -333,22 +335,24 @@ struct KSORiPadButton: View {
 
             Button(action: onTap) {
                 ZStack {
-                    // 배경
+                    // 배경: 활성 시 activeDisplayColor로 버튼 전체를 균일하게 채움
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(categoryColor.opacity(isActive ? 0.88 : 0.30))
+                        .fill(isActive
+                              ? activeDisplayColor.opacity(0.88)
+                              : categoryColor.opacity(0.30))
 
-                    // 외부 글로우 (활성 시) — 모든 버튼 동일 구조
+                    // 외부 글로우 — activeDisplayColor 사용으로 배경과 색 통일
                     if isActive {
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(glowColor.opacity(0.55))
+                            .fill(activeDisplayColor.opacity(0.50))
                             .blur(radius: 12)
                             .scaleEffect(1.10)
                     }
 
-                    // 테두리 — 모든 버튼 동일 구조
+                    // 테두리
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(
-                            categoryColor.opacity(isActive ? 0.95 : 0.38),
+                            activeDisplayColor.opacity(isActive ? 0.90 : 0.38),
                             lineWidth: isActive ? 2 : 1
                         )
 
@@ -359,7 +363,7 @@ struct KSORiPadButton: View {
                         .brightness(isActive ? 0.12 : -0.18)
                         .saturation(isActive ? 1.25 : 0.55)
                         .shadow(
-                            color: isActive ? glowColor.opacity(0.9) : .clear,
+                            color: isActive ? activeDisplayColor.opacity(0.85) : .clear,
                             radius: isActive ? 10 : 0
                         )
 
