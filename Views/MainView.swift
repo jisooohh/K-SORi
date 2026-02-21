@@ -236,7 +236,7 @@ struct InstrumentDisplayView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 150)
+        .frame(height: 168)
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .glassmorphism()
@@ -247,12 +247,12 @@ struct InstrumentColumn: View {
     let category: Constants.SoundCategory
     let activeCount: Int
 
-    // 컨테이너 128pt / 악기 이미지 90pt
-    // 비활성: offset +37 → 하단 ~20% 클리핑
+    // 컨테이너 148pt / 악기 이미지 115pt
+    // 비활성: offset +35 → 하단 ~20% 클리핑
     // 활성:   offset  0  → 중앙 배치
-    private let containerH: CGFloat    = 128
-    private let instrumentH: CGFloat   = 90
-    private let inactiveOffset: CGFloat = 37
+    private let containerH: CGFloat    = 148
+    private let instrumentH: CGFloat   = 115
+    private let inactiveOffset: CGFloat = 35
 
     private var level: Int  { min(activeCount, 6) }
     private var isActive: Bool { activeCount > 0 }
@@ -319,6 +319,13 @@ struct KSORiPadButton: View {
 
     private var categoryColor: Color { sound.category.color }
 
+    // 검정(base) 버튼은 활성 시 금색 강조 → 어두운 배경에서 가시성 확보
+    private var activeAccentColor: Color {
+        sound.category == .base
+            ? Color(red: 0.88, green: 0.68, blue: 0.18)
+            : categoryColor
+    }
+
     var body: some View {
         GeometryReader { geo in
             let size = geo.size.width
@@ -329,19 +336,19 @@ struct KSORiPadButton: View {
                     RoundedRectangle(cornerRadius: 12)
                         .fill(categoryColor.opacity(isActive ? 0.88 : 0.30))
 
-                    // 외부 글로우 (활성 시)
+                    // 외부 글로우 (활성 시) — 검정 버튼은 금색 글로우
                     if isActive {
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(categoryColor.opacity(0.5))
-                            .blur(radius: 10)
-                            .scaleEffect(1.08)
+                            .fill(activeAccentColor.opacity(0.55))
+                            .blur(radius: 12)
+                            .scaleEffect(1.10)
                     }
 
-                    // 테두리
+                    // 테두리 — 검정 버튼 활성 시 밝은 금색 테두리
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(
-                            categoryColor.opacity(isActive ? 0.95 : 0.38),
-                            lineWidth: isActive ? 2 : 1
+                            activeAccentColor.opacity(isActive ? 0.95 : 0.38),
+                            lineWidth: isActive ? 2.5 : 1
                         )
 
                     // 악기 실제 이미지
@@ -351,8 +358,8 @@ struct KSORiPadButton: View {
                         .brightness(isActive ? 0.12 : -0.18)
                         .saturation(isActive ? 1.25 : 0.55)
                         .shadow(
-                            color: isActive ? categoryColor.opacity(0.85) : .clear,
-                            radius: isActive ? 8 : 0
+                            color: isActive ? activeAccentColor.opacity(0.9) : .clear,
+                            radius: isActive ? 10 : 0
                         )
 
                     // 퀀타이즈 대기 링
