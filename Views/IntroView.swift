@@ -2,6 +2,7 @@ import SwiftUI
 
 struct IntroView: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var tutorialManager: TutorialManager
     @State private var showContent = false
     @State private var dontShowAgain = false
     @State private var rotationAngle: Double = 0
@@ -31,12 +32,7 @@ struct IntroView: View {
 
                     // Two Feature Sections
                     VStack(spacing: 20) {
-                        traditionalFeatureCard(
-                            title: "The Beauty of K-SORi",
-                            description: "Gugak embodies the aesthetics of nature. Melodies based on breath provide comfort and emotional catharsis through the harmony of instruments.",
-                            color: GugakDesign.Colors.obangsaekBlue,
-                            icon: "leaf.fill"
-                        )
+                            beautyOfKSORiCard
 
                         traditionalFeatureCard(
                             title: "K-SORi Features",
@@ -72,6 +68,11 @@ struct IntroView: View {
                         .opacity(showContent ? 1 : 0)
                         .scaleEffect(showContent ? 1 : 0.9)
                         .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.45), value: showContent)
+
+                    // Tutorial replay button
+                    tutorialButton
+                        .opacity(showContent ? 1 : 0)
+                        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.5), value: showContent)
 
                     Spacer(minLength: 60)
                 }
@@ -135,10 +136,25 @@ struct IntroView: View {
                 .stroke(GugakDesign.Colors.obangsaekRed, lineWidth: 2)
                 .frame(width: 150, height: 20)
 
-            Text("K-SORi")
-                .font(.system(size: 64, weight: .bold, design: .serif))
-                .foregroundColor(.white)
-                .shadow(color: GugakDesign.Colors.obangsaekRed.opacity(0.3), radius: 10)
+            // K-SORi logo with Taeguk inside the O
+            HStack(alignment: .center, spacing: 0) {
+                Text("K-S")
+                    .font(.system(size: 64, weight: .bold, design: .serif))
+                    .foregroundColor(.white)
+
+                ZStack {
+                    // Invisible O maintains correct kerning/spacing
+                    Text("O")
+                        .font(.system(size: 64, weight: .bold, design: .serif))
+                        .foregroundColor(.clear)
+                    TaegukkCircle(size: 48)
+                }
+
+                Text("Ri")
+                    .font(.system(size: 64, weight: .bold, design: .serif))
+                    .foregroundColor(.white)
+            }
+            .shadow(color: GugakDesign.Colors.obangsaekRed.opacity(0.3), radius: 10)
 
             Text("Korean Sound Origami")
                 .font(.system(size: 16, weight: .medium))
@@ -333,6 +349,87 @@ struct IntroView: View {
         }
     }
 
+    // MARK: - Beauty of K-SORi Card (with instrument images)
+
+    private var beautyOfKSORiCard: some View {
+        VStack(spacing: 14) {
+            HStack(spacing: 16) {
+                ZStack {
+                    WadangPattern(style: .lotus)
+                        .fill(GugakDesign.Colors.obangsaekBlue.opacity(0.15))
+                        .frame(width: 60, height: 60)
+                    Image(systemName: "leaf.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(GugakDesign.Colors.obangsaekBlue)
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("The Beauty of K-SORi")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.white)
+                    Text("Gugak embodies the aesthetics of nature. Melodies based on breath provide comfort and catharsis through the harmony of instruments.")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.8))
+                        .lineSpacing(3)
+                }
+                Spacer()
+            }
+
+            // 5 representative instrument images
+            HStack(spacing: 4) {
+                ForEach(Constants.SoundCategory.allCases, id: \.self) { category in
+                    VStack(spacing: 5) {
+                        InstrumentImage(name: category.instrumentImageName)
+                            .scaledToFit()
+                            .frame(height: 58)
+                            .brightness(-0.05)
+                            .saturation(0.85)
+                        Text(category.instrumentName)
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .padding(.top, 2)
+        }
+        .padding(20)
+        .background(
+            ZStack {
+                RoundedRectangle(cornerRadius: 16).fill(Color.white.opacity(0.03))
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(GugakDesign.Colors.obangsaekBlue.opacity(0.3), lineWidth: 1.5)
+            }
+        )
+    }
+
+    // MARK: - Tutorial Button
+
+    private var tutorialButton: some View {
+        Button(action: {
+            if dontShowAgain { appState.setShouldShowIntro(false) }
+            appState.navigateTo(.main)
+            Task {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                tutorialManager.start(sounds: appState.soundPad.sounds)
+            }
+        }) {
+            HStack(spacing: 10) {
+                Image(systemName: "graduationcap.fill")
+                    .font(.system(size: 16))
+                Text("Start Tutorial")
+                    .font(.system(size: 15, weight: .semibold))
+            }
+            .foregroundColor(.white.opacity(0.85))
+            .padding(.horizontal, 40)
+            .padding(.vertical, 13)
+            .background(
+                Capsule()
+                    .fill(Color.white.opacity(0.08))
+                    .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: 1.5))
+            )
+        }
+    }
+
     // MARK: - Helper Functions
 
     private func obangsaekColor(for index: Int) -> Color {
@@ -518,6 +615,66 @@ struct TraditionalLineDecoration: Shape {
         path.addCurve(to: endPoint2, control1: controlPoint3, control2: controlPoint4)
 
         return path
+    }
+}
+
+// MARK: - Taeguk (태극) Circle
+
+/// Yin-yang style Taeguk symbol used inside the logo O
+struct TaegukkCircle: View {
+    let size: CGFloat
+
+    private let yangRed  = Color(red: 0.95, green: 0.2,  blue: 0.2)
+    private let yinBlue  = Color(red: 0.2,  green: 0.5,  blue: 0.9)
+
+    var body: some View {
+        ZStack {
+            // 1. Yin (blue) base — full circle
+            Circle().fill(yinBlue)
+
+            // 2. Yang (red) — right half
+            Circle().fill(yangRed)
+                .clipShape(TaegukkHalfClip(side: .right))
+
+            // 3. Yin bump: blue small circle on top (S-curve upper half)
+            Circle().fill(yinBlue)
+                .frame(width: size * 0.5, height: size * 0.5)
+                .offset(y: -size * 0.25)
+
+            // 4. Yang bump: red small circle on bottom (S-curve lower half)
+            Circle().fill(yangRed)
+                .frame(width: size * 0.5, height: size * 0.5)
+                .offset(y: size * 0.25)
+
+            // 5. Yang seed dot in yin bump
+            Circle().fill(yangRed)
+                .frame(width: size * 0.17, height: size * 0.17)
+                .offset(y: -size * 0.25)
+
+            // 6. Yin seed dot in yang bump
+            Circle().fill(yinBlue)
+                .frame(width: size * 0.17, height: size * 0.17)
+                .offset(y: size * 0.25)
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(Color.white.opacity(0.75), lineWidth: 1.5))
+    }
+}
+
+private struct TaegukkHalfClip: Shape {
+    enum Side { case left, right }
+    let side: Side
+
+    func path(in rect: CGRect) -> Path {
+        switch side {
+        case .right:
+            return Path(CGRect(x: rect.midX, y: rect.minY,
+                               width: rect.width / 2, height: rect.height))
+        case .left:
+            return Path(CGRect(x: rect.minX, y: rect.minY,
+                               width: rect.width / 2, height: rect.height))
+        }
     }
 }
 
