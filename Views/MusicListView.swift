@@ -3,6 +3,7 @@ import AVFoundation
 
 struct MusicListView: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var tutorialManager: TutorialManager
     @StateObject private var playbackManager = MusicPlaybackManager()
 
     var body: some View {
@@ -22,16 +23,20 @@ struct MusicListView: View {
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 12) {
-                            ForEach(appState.recordedMusics) { music in
+                            ForEach(Array(appState.recordedMusics.enumerated()), id: \.element.id) { index, music in
                                 MusicCard(
                                     music: music,
                                     isPlaying: playbackManager.currentlyPlaying?.id == music.id,
                                     currentTime: playbackManager.currentlyPlaying?.id == music.id ? playbackManager.currentTime : 0,
+                                    isTutorialTarget: index == 0 && tutorialManager.isActive && tutorialManager.step == .playButton,
                                     onTogglePlay: {
                                         if playbackManager.currentlyPlaying?.id == music.id {
                                             playbackManager.stop()
                                         } else {
                                             playbackManager.play(music)
+                                            if index == 0 && tutorialManager.isActive && tutorialManager.step == .playButton {
+                                                tutorialManager.advance()
+                                            }
                                         }
                                     },
                                     onDelete: { deleteMusic(music) }
@@ -177,6 +182,7 @@ struct MusicCard: View {
     let music: RecordedMusic
     let isPlaying: Bool
     let currentTime: TimeInterval
+    var isTutorialTarget: Bool = false
     let onTogglePlay: () -> Void
     let onDelete: () -> Void
 
@@ -209,6 +215,7 @@ struct MusicCard: View {
                             .offset(x: isPlaying ? 0 : 2)
                     }
                 }
+                .tutorialFrame(isTutorialTarget ? "play_first" : "play_\(music.id)")
 
                 // Music Info
                 VStack(alignment: .leading, spacing: 6) {
