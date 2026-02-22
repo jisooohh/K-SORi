@@ -1,12 +1,103 @@
 import SwiftUI
 import UIKit
+import AVFoundation
+
+// MARK: - Last Recording Player
+
+@MainActor
+final class LastRecordingPlayer: NSObject, ObservableObject {
+    @Published var music: RecordedMusic?
+    @Published var isPlaying: Bool = false
+    @Published var remainingTime: TimeInterval = 0
+
+    private var player: AVAudioPlayer?
+    private var countdownTimer: Timer?
+
+    func setMusic(_ newMusic: RecordedMusic) {
+        stop()
+        music = newMusic
+        remainingTime = newMusic.duration
+    }
+
+    func toggle() {
+        isPlaying ? pause() : play()
+    }
+
+    func play() {
+        guard let music = music else { return }
+        let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(music.fileName)
+
+        do {
+            if player == nil {
+                let p = try AVAudioPlayer(contentsOf: url)
+                p.delegate = self
+                p.prepareToPlay()
+                player = p
+            }
+            player?.play()
+            isPlaying = true
+            startCountdown()
+        } catch {
+            print("❌ LastRecordingPlayer play: \(error)")
+        }
+    }
+
+    func pause() {
+        player?.pause()
+        isPlaying = false
+        stopCountdown()
+    }
+
+    func stop() {
+        player?.stop()
+        player = nil
+        isPlaying = false
+        stopCountdown()
+        remainingTime = music?.duration ?? 0
+    }
+
+    private func startCountdown() {
+        stopCountdown()
+        countdownTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, let player = self.player, player.isPlaying else { return }
+                self.remainingTime = max(0, player.duration - player.currentTime)
+            }
+        }
+    }
+
+    private func stopCountdown() {
+        countdownTimer?.invalidate()
+        countdownTimer = nil
+    }
+
+    fileprivate func handlePlaybackFinished() {
+        isPlaying = false
+        stopCountdown()
+        player = nil
+        remainingTime = music?.duration ?? 0
+    }
+}
+
+extension LastRecordingPlayer: AVAudioPlayerDelegate {
+    nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        Task { @MainActor in
+            self.handlePlaybackFinished()
+        }
+    }
+}
+
+// MARK: - Main View
 
 struct MainView: View {
     @EnvironmentObject var appState: AppState
-    @StateObject private var beatEngine       = BeatEngine(bpm: 120.0)
-    @StateObject private var audioPlayerManager = AudioPlayerManager()
-    @StateObject private var hapticManager    = HapticManager()
-    @StateObject private var recordingManager = RecordingManager()
+    @EnvironmentObject var tutorialManager: TutorialManager
+    @StateObject private var beatEngine          = BeatEngine(bpm: 120.0)
+    @StateObject private var audioPlayerManager  = AudioPlayerManager()
+    @StateObject private var hapticManager       = HapticManager()
+    @StateObject private var recordingManager    = RecordingManager()
+    @StateObject private var lastRecordingPlayer = LastRecordingPlayer()
 
     @State private var activePads:      Set<Int> = []
     @State private var pendingPads:     Set<Int> = []
@@ -48,10 +139,45 @@ struct MainView: View {
         .onAppear {
             audioPlayerManager.setBeatEngine(beatEngine)
             if !beatEngine.isRunning { beatEngine.start() }
+            if !tutorialManager.hasBeenShown {
+                Task {
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    tutorialManager.start(sounds: appState.soundPad.sounds)
+                }
+            }
+        }
+        .onReceive(recordingManager.$lastSavedMusic) { music in
+            if let music = music {
+                lastRecordingPlayer.setMusic(music)
+            }
         }
     }
 
     // MARK: - Top Control Bar
+
+    private var timerValue: TimeInterval {
+        if recordingManager.isRecording {
+            return recordingManager.recordingDuration
+        } else if lastRecordingPlayer.isPlaying {
+            return lastRecordingPlayer.remainingTime
+        } else {
+            return 0
+        }
+    }
+
+    private var timerColor: Color {
+        if recordingManager.isRecording {
+            return Color.red.opacity(0.9)
+        } else if lastRecordingPlayer.isPlaying {
+            return Color.green.opacity(0.9)
+        } else {
+            return Color.white.opacity(0.8)
+        }
+    }
+
+    private var showPlayButton: Bool {
+        lastRecordingPlayer.music != nil && !recordingManager.isRecording
+    }
 
     private var topControlBar: some View {
         HStack(spacing: GugakDesign.Spacing.md) {
@@ -63,7 +189,12 @@ struct MainView: View {
                     .background(Circle().fill(Color.white.opacity(0.1)))
             }
 
-            Button(action: { appState.navigateTo(.musicList) }) {
+            Button(action: {
+                appState.navigateTo(.musicList)
+                if tutorialManager.isActive && tutorialManager.step == .fileButton {
+                    tutorialManager.advance()
+                }
+            }) {
                 Text("File")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.white.opacity(0.8))
@@ -71,10 +202,12 @@ struct MainView: View {
                     .padding(.vertical, 8)
                     .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.1)))
             }
+            .tutorialFrame("file")
 
             Spacer()
 
             HStack(spacing: 12) {
+                // Record button
                 Button(action: toggleRecording) {
                     Circle()
                         .fill(Color.red)
@@ -86,7 +219,9 @@ struct MainView: View {
                         )
                         .opacity(recordingManager.isRecording ? 1.0 : 0.6)
                 }
+                .tutorialFrame("record")
 
+                // Stop button
                 Button(action: stopAll) {
                     RoundedRectangle(cornerRadius: 4)
                         .fill(Color.gray.opacity(0.6))
@@ -96,16 +231,39 @@ struct MainView: View {
                                 .stroke(Color.white.opacity(0.3), lineWidth: 1)
                         )
                 }
+                .tutorialFrame("stop")
+
+                // Play button — appears after a recording is saved
+                if showPlayButton {
+                    Button(action: { lastRecordingPlayer.toggle() }) {
+                        Circle()
+                            .fill(Color.white.opacity(0.15))
+                            .frame(width: 28, height: 28)
+                            .overlay(
+                                Image(systemName: lastRecordingPlayer.isPlaying ? "pause.fill" : "play.fill")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundColor(.white)
+                            )
+                            .overlay(Circle().stroke(Color.white.opacity(0.4), lineWidth: 1))
+                            .shadow(
+                                color: lastRecordingPlayer.isPlaying ? Color.green.opacity(0.6) : .clear,
+                                radius: lastRecordingPlayer.isPlaying ? 8 : 0
+                            )
+                    }
+                    .transition(.scale(scale: 0.5).combined(with: .opacity))
+                }
             }
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showPlayButton)
 
             Spacer()
 
-            Text(formatDuration(recordingManager.isRecording ? recordingManager.recordingDuration : 0))
+            Text(formatDuration(timerValue))
                 .font(.system(size: 14, design: .monospaced))
-                .foregroundColor(.white.opacity(0.8))
+                .foregroundColor(timerColor)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.1)))
+                .animation(.easeInOut(duration: 0.2), value: timerColor == Color.green.opacity(0.9))
         }
         .padding(GugakDesign.Spacing.md)
         .glassmorphism()
@@ -137,6 +295,7 @@ struct MainView: View {
             hapticManager.playHaptic(for: sound.category)
             pendingPads.insert(pos)
             pollForActivation(sound)
+            tutorialManager.handlePadTap(sound)
         }
     }
 
@@ -156,7 +315,11 @@ struct MainView: View {
         if recordingManager.isRecording {
             if let music = recordingManager.stopRecording() { appState.addRecordedMusic(music) }
         } else {
+            lastRecordingPlayer.stop()
             _ = recordingManager.startRecording()
+            if tutorialManager.isActive && tutorialManager.step == .recordButton {
+                tutorialManager.advance()
+            }
         }
         hapticManager.playSimpleHaptic()
     }
@@ -170,6 +333,9 @@ struct MainView: View {
         pendingPads.removeAll()
         pendingStopPads.removeAll()
         hapticManager.playSimpleHaptic()
+        if tutorialManager.isActive && tutorialManager.step == .stopButton {
+            tutorialManager.advance()
+        }
     }
 
     private func formatDuration(_ duration: TimeInterval) -> String {
@@ -184,18 +350,14 @@ struct InstrumentImage: View {
     let name: String
 
     private var uiImage: UIImage? {
-        // 방법 1: UIImage(named:)
         if let img = UIImage(named: name) { return img }
 
-        // 방법 2: Bundle Resources 서브디렉토리
         if let url = Bundle.main.url(forResource: name, withExtension: "png", subdirectory: "Resources"),
            let img = UIImage(contentsOfFile: url.path) { return img }
 
-        // 방법 3: Bundle 직접
         if let url = Bundle.main.url(forResource: name, withExtension: "png"),
            let img = UIImage(contentsOfFile: url.path) { return img }
 
-        // 방법 4: resourcePath 경로 순회
         if let base = Bundle.main.resourcePath {
             for suffix in ["Resources/\(name).png", "\(name).png"] {
                 let path = (base as NSString).appendingPathComponent(suffix)
@@ -216,9 +378,6 @@ struct InstrumentImage: View {
 
 // MARK: - Instrument Display
 
-/// 5가지 악기 이미지 행
-/// - 비활성: 하단 ~20% 클리핑, 어두운 금색
-/// - 활성: 중앙으로 상승 + 밝기/채도 증가 (6단계)
 struct InstrumentDisplayView: View {
     let categoryActiveCounts: [Constants.SoundCategory: Int]
 
@@ -247,19 +406,17 @@ struct InstrumentColumn: View {
     let category: Constants.SoundCategory
     let activeCount: Int
 
-    // 컨테이너 162pt / 악기 이미지 155pt (173 × 0.9)
-    // 비활성: offset +35 → 하단 ~20% 클리핑
-    // 활성:   offset  0  → 중앙 배치
-    private let containerH: CGFloat    = 162
-    private let instrumentH: CGFloat   = 155
+    private let containerH: CGFloat     = 162
+    private let instrumentH: CGFloat    = 155
     private let inactiveOffset: CGFloat = 35
 
-    private var level: Int  { min(activeCount, 6) }
+    private var level: Int    { min(activeCount, 6) }
     private var isActive: Bool { activeCount > 0 }
 
-    // level 0 = 어두운 금색(-0.3 brightness), level 6 = 밝은 흰빛(+0.45)
-    private var brightnessAdj: Double { Double(level) * 0.125 - 0.3 }
-    private var saturationAdj: Double { 0.25 + Double(level) * 0.125 }
+    // level 0 = nearly natural (-0.05 brightness, 0.65 saturation)
+    // level 6 = bright glow   (+0.70 brightness, 1.25 saturation)
+    private var brightnessAdj: Double { Double(level) * 0.125 - 0.05 }
+    private var saturationAdj: Double { 0.65 + Double(level) * 0.1 }
     private var glowRadius: CGFloat   { level >= 4 ? CGFloat(level - 3) * 6 : 0 }
 
     var body: some View {
@@ -290,6 +447,7 @@ struct KSORiPadGrid: View {
     @Binding var activePads:  Set<Int>
     @Binding var pendingPads: Set<Int>
     let onPadTapped: (Sound) -> Void
+    @EnvironmentObject var tutorialManager: TutorialManager
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 5)
 
@@ -302,6 +460,7 @@ struct KSORiPadGrid: View {
                     isPending: pendingPads.contains(sound.position),
                     onTap: { onPadTapped(sound) }
                 )
+                .tutorialFrame("pad_\(sound.position)")
             }
         }
     }
@@ -319,10 +478,6 @@ struct KSORiPadButton: View {
 
     private var categoryColor: Color { sound.category.color }
 
-    // 활성 시 표시 색상:
-    // - 검정(base): 밝은 회색(균일하게 높아진 채도+밝기) → 버튼 전체 fill에 사용
-    // - 나머지: categoryColor 그대로
-    // glow도 같은 색을 사용해 "흰색 섞인" 느낌 없이 균일하게 보임
     private var activeDisplayColor: Color {
         sound.category == .base
             ? Color(red: 0.42, green: 0.42, blue: 0.46)
@@ -335,13 +490,11 @@ struct KSORiPadButton: View {
 
             Button(action: onTap) {
                 ZStack {
-                    // 배경: 활성 시 activeDisplayColor로 버튼 전체를 균일하게 채움
                     RoundedRectangle(cornerRadius: 12)
                         .fill(isActive
                               ? activeDisplayColor.opacity(0.88)
                               : categoryColor.opacity(0.30))
 
-                    // 외부 글로우 — activeDisplayColor 사용으로 배경과 색 통일
                     if isActive {
                         RoundedRectangle(cornerRadius: 12)
                             .fill(activeDisplayColor.opacity(0.50))
@@ -349,14 +502,12 @@ struct KSORiPadButton: View {
                             .scaleEffect(1.10)
                     }
 
-                    // 테두리
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(
                             activeDisplayColor.opacity(isActive ? 0.90 : 0.38),
                             lineWidth: isActive ? 2 : 1
                         )
 
-                    // 악기 실제 이미지
                     InstrumentImage(name: sound.category.instrumentImageName)
                         .scaledToFit()
                         .frame(width: size * 0.78, height: size * 0.78)
@@ -367,7 +518,6 @@ struct KSORiPadButton: View {
                             radius: isActive ? 10 : 0
                         )
 
-                    // 퀀타이즈 대기 링
                     if isPending {
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(Color.yellow.opacity(0.9), lineWidth: 2.5)
