@@ -110,6 +110,7 @@ class AudioPlayerManager: ObservableObject {
             engineManager.engine.connect(node, to: engineManager.mainMixer, format: format)
             engineManager.startEngineIfNeeded()
 
+            node.volume = 2.0
             node.scheduleBuffer(buffer, at: nil, options: [], completionHandler: nil)
             node.play()
 
