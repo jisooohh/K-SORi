@@ -88,7 +88,8 @@ class TutorialManager: ObservableObject {
     @Published var step: TutorialStep = .recordButton
 
     private(set) var targetPadPositions: [Constants.SoundCategory: Int] = [:]
-    var frames: [String: CGRect] = [:]
+    /// @Published로 선언하여 프레임 등록 시 TutorialOverlayView가 즉시 재렌더링되도록 함
+    @Published var frames: [String: CGRect] = [:]
 
     private let tutorialShownKey = "tutorialHasBeenShown"
 

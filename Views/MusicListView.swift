@@ -5,18 +5,21 @@ struct MusicListView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var tutorialManager: TutorialManager
     @StateObject private var playbackManager = MusicPlaybackManager()
+
     @State private var selectedIDs: Set<UUID> = []
-    @State private var showBulkShareSheet = false
-    @State private var bulkShareItems: [Any] = []
-    @State private var showBulkDeleteConfirm = false
+    @State private var isSelectionMode = false
+    @State private var showDeleteConfirm = false
+
+    private var allSelected: Bool {
+        !appState.recordedMusics.isEmpty &&
+        selectedIDs.count == appState.recordedMusics.count
+    }
 
     var body: some View {
         ZStack {
-            GugakDesign.Colors.darkNight
-                .ignoresSafeArea()
+            GugakDesign.Colors.darkNight.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Header
                 headerView
                     .padding(.horizontal, 20)
                     .padding(.top, 16)
@@ -32,8 +35,11 @@ struct MusicListView: View {
                                 music: music,
                                 isPlaying: playbackManager.currentlyPlaying?.id == music.id,
                                 currentTime: playbackManager.currentlyPlaying?.id == music.id ? playbackManager.currentTime : 0,
+                                isSelectionMode: isSelectionMode,
+                                isSelected: selectedIDs.contains(music.id),
                                 isTutorialTarget: isFirst && tutorialManager.isActive && tutorialManager.step == .playButton,
                                 onTogglePlay: {
+                                    guard !isSelectionMode else { return }
                                     if playbackManager.currentlyPlaying?.id == music.id {
                                         playbackManager.stop()
                                     } else {
@@ -42,128 +48,167 @@ struct MusicListView: View {
                                             tutorialManager.advance()
                                         }
                                     }
+                                },
+                                onToggleSelect: {
+                                    toggleSelection(music.id)
+                                },
+                                onLongPress: {
+                                    guard !isSelectionMode else { return }
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        isSelectionMode = true
+                                        selectedIDs = [music.id]
+                                    }
                                 }
                             )
                             .listRowBackground(Color.clear)
                             .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                             .listRowSeparator(.hidden)
                         }
-                        .onDelete(perform: deleteMusicAtOffsets)
+                        .onDelete(perform: isSelectionMode ? nil : deleteMusicAtOffsets)
                     }
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
                 }
             }
         }
-        .confirmationDialog("Delete selected recordings?", isPresented: $showBulkDeleteConfirm, titleVisibility: .visible) {
-            Button("Delete", role: .destructive) { deleteSelectedMusics() }
-            Button("Cancel", role: .cancel) {}
-        }
-        .sheet(isPresented: $showBulkShareSheet) {
-            ShareSheet(items: bulkShareItems)
-        }
         .onReceive(NotificationCenter.default.publisher(for: .appStopAllAudio)) { _ in
             playbackManager.stop()
         }
     }
 
+    // MARK: - Header
+
+    @ViewBuilder
     private var headerView: some View {
-        HStack {
-            Button(action: {
-                playbackManager.stop()
-                appState.navigateTo(.main)
-            }) {
-                Image(systemName: "arrow.left")
-                    .font(.system(size: 20))
+        if isSelectionMode {
+            HStack(spacing: 8) {
+                Text("\(selectedIDs.count) selected")
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(.white)
-                    .frame(width: 44, height: 44)
+
+                Spacer()
+
+                // Trash button — confirmationDialog를 버튼에 직접 부착 (List 컨텍스트 우회)
+                Button(action: {
+                    showDeleteConfirm = true
+                }) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 18))
+                        .foregroundColor(selectedIDs.isEmpty ? .white.opacity(0.3) : Color(red: 1.0, green: 0.3, blue: 0.3))
+                        .frame(width: 44, height: 44)
+                        .background(Circle().fill(Color.white.opacity(selectedIDs.isEmpty ? 0.05 : 0.12)))
+                }
+                .disabled(selectedIDs.isEmpty)
+                .confirmationDialog(
+                    selectedIDs.count == 1 ? "Delete this recording?" : "Delete \(selectedIDs.count) recordings?",
+                    isPresented: $showDeleteConfirm,
+                    titleVisibility: .visible
+                ) {
+                    Button("Delete", role: .destructive) {
+                        deleteSelectedMusics()
+                        exitSelectionMode()
+                    }
+                    Button("Cancel", role: .cancel) {}
+                }
+
+                // Select All → Cancel (when all selected)
+                Button(action: {
+                    if allSelected {
+                        exitSelectionMode()
+                    } else {
+                        withAnimation {
+                            selectedIDs = Set(appState.recordedMusics.map { $0.id })
+                        }
+                    }
+                }) {
+                    Text(allSelected ? "Cancel" : "Select All")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(Capsule().fill(Color.white.opacity(0.15)))
+                }
             }
+            .frame(height: 44)
+        } else {
+            HStack {
+                Button(action: {
+                    playbackManager.stop()
+                    appState.navigateTo(.main)
+                }) {
+                    Image(systemName: "arrow.left")
+                        .font(.system(size: 20))
+                        .foregroundColor(.white)
+                        .frame(width: 44, height: 44)
+                }
 
-            Text("Recorded Music")
-                .font(.system(size: 28, weight: .bold))
-                .foregroundColor(.white)
+                Text("Recorded Music")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(.white)
 
-            Spacer()
+                Spacer()
 
-            Text("\(appState.recordedMusics.count) tracks")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(.white.opacity(0.7))
-
-            Menu {
-                Button("Select All") { selectAll() }
-                Button("Clear Selection") { selectedIDs.removeAll() }
-                Button("Share Selected") { shareSelectedMusics() }
-                    .disabled(selectedIDs.isEmpty)
-                Button("Delete Selected", role: .destructive) { showBulkDeleteConfirm = true }
-                    .disabled(selectedIDs.isEmpty)
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .font(.system(size: 18))
-                    .foregroundColor(.white.opacity(0.85))
-                    .frame(width: 44, height: 44)
+                Text("\(appState.recordedMusics.count) tracks")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.white.opacity(0.7))
             }
         }
     }
+
+    // MARK: - Empty State
 
     private var emptyStateView: some View {
         VStack(spacing: 20) {
             Spacer()
-
             Image(systemName: "music.note")
                 .font(.system(size: 80))
                 .foregroundColor(.white.opacity(0.3))
-
             Text("No recordings yet")
                 .font(.system(size: 18, weight: .medium))
                 .foregroundColor(.white.opacity(0.7))
-
             Text("Create music on the main screen\nand press the record button")
                 .font(.system(size: 14))
                 .foregroundColor(.white.opacity(0.5))
                 .multilineTextAlignment(.center)
-
             Spacer()
         }
     }
 
-    private func deleteMusic(_ music: RecordedMusic) {
-        if playbackManager.currentlyPlaying?.id == music.id {
-            playbackManager.stop()
-        }
-        appState.deleteRecordedMusic(music)
+    // MARK: - Actions
 
-        // Delete file
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let audioURL = documentsPath.appendingPathComponent(music.fileName)
-        try? FileManager.default.removeItem(at: audioURL)
+    private func toggleSelection(_ id: UUID) {
+        withAnimation(.easeInOut(duration: 0.15)) {
+            if selectedIDs.contains(id) {
+                selectedIDs.remove(id)
+                if selectedIDs.isEmpty { exitSelectionMode() }
+            } else {
+                selectedIDs.insert(id)
+            }
+        }
+    }
+
+    private func exitSelectionMode() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            isSelectionMode = false
+            selectedIDs.removeAll()
+        }
+    }
+
+    private func deleteMusic(_ music: RecordedMusic) {
+        if playbackManager.currentlyPlaying?.id == music.id { playbackManager.stop() }
+        appState.deleteRecordedMusic(music)
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        try? FileManager.default.removeItem(at: docs.appendingPathComponent(music.fileName))
     }
 
     private func deleteMusicAtOffsets(_ offsets: IndexSet) {
-        for index in offsets {
-            let music = appState.recordedMusics[index]
-            deleteMusic(music)
-        }
-    }
-
-    private func selectAll() {
-        selectedIDs = Set(appState.recordedMusics.map { $0.id })
-    }
-
-    private func shareSelectedMusics() {
-        let items = appState.recordedMusics
-            .filter { selectedIDs.contains($0.id) }
-            .map { FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent($0.fileName) }
-        guard !items.isEmpty else { return }
-        bulkShareItems = items
-        showBulkShareSheet = true
+        for index in offsets { deleteMusic(appState.recordedMusics[index]) }
     }
 
     private func deleteSelectedMusics() {
-        let musics = appState.recordedMusics.filter { selectedIDs.contains($0.id) }
-        for music in musics {
+        for music in appState.recordedMusics.filter({ selectedIDs.contains($0.id) }) {
             deleteMusic(music)
         }
-        selectedIDs.removeAll()
     }
 }
 
@@ -179,17 +224,14 @@ class MusicPlaybackManager: ObservableObject {
 
     func play(_ music: RecordedMusic) {
         stop()
-
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let audioURL = documentsPath.appendingPathComponent(music.fileName)
-
+        let audioURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(music.fileName)
         do {
             audioPlayer = try AVAudioPlayer(contentsOf: audioURL)
             audioPlayer?.prepareToPlay()
             audioPlayer?.play()
             currentlyPlaying = music
             currentTime = 0
-
             startDisplayLink()
         } catch {
             print("❌ Playback failed: \(error.localizedDescription)")
@@ -215,21 +257,12 @@ class MusicPlaybackManager: ObservableObject {
     }
 
     @objc private func updateProgress() {
-        guard let player = audioPlayer, player.isPlaying else {
-            stop()
-            return
-        }
-
+        guard let player = audioPlayer, player.isPlaying else { stop(); return }
         currentTime = player.currentTime
-
-        // Auto-stop when finished
-        if currentTime >= player.duration {
-            stop()
-        }
+        if currentTime >= player.duration { stop() }
     }
 
     nonisolated deinit {
-        // Invalidate on deinit - safe from any context
         displayLink?.invalidate()
     }
 }
@@ -240,8 +273,12 @@ struct MusicCard: View {
     let music: RecordedMusic
     let isPlaying: Bool
     let currentTime: TimeInterval
+    var isSelectionMode: Bool = false
+    var isSelected: Bool = false
     var isTutorialTarget: Bool = false
     let onTogglePlay: () -> Void
+    var onToggleSelect: () -> Void = {}
+    var onLongPress: () -> Void = {}
 
     @State private var showShareSheet = false
 
@@ -251,29 +288,53 @@ struct MusicCard: View {
     }
 
     private var fileURL: URL {
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        return documentsPath.appendingPathComponent(music.fileName)
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(music.fileName)
     }
 
     var body: some View {
         VStack(spacing: 12) {
             HStack(spacing: 16) {
-                // Play/Stop Button
-                Button(action: onTogglePlay) {
-                    ZStack {
-                        Circle()
-                            .fill(isPlaying ? GugakDesign.Colors.obangsaekRed : Color.white.opacity(0.2))
-                            .frame(width: 50, height: 50)
 
-                        Image(systemName: isPlaying ? "stop.fill" : "play.fill")
-                            .font(.system(size: 20))
-                            .foregroundColor(.white)
-                            .offset(x: isPlaying ? 0 : 2)
+                // 선택 모드: 체크박스 / 일반 모드: 재생 버튼
+                if isSelectionMode {
+                    Button(action: onToggleSelect) {
+                        ZStack {
+                            Circle()
+                                .fill(isSelected ? GugakDesign.Colors.obangsaekBlue : Color.clear)
+                                .frame(width: 28, height: 28)
+                            Circle()
+                                .stroke(
+                                    isSelected ? GugakDesign.Colors.obangsaekBlue : Color.white.opacity(0.4),
+                                    lineWidth: 2
+                                )
+                                .frame(width: 28, height: 28)
+                            if isSelected {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .frame(width: 50, height: 50)
                     }
+                    .buttonStyle(.plain)
+                } else {
+                    Button(action: onTogglePlay) {
+                        ZStack {
+                            Circle()
+                                .fill(isPlaying ? GugakDesign.Colors.obangsaekRed : Color.white.opacity(0.2))
+                                .frame(width: 50, height: 50)
+                            Image(systemName: isPlaying ? "stop.fill" : "play.fill")
+                                .font(.system(size: 20))
+                                .foregroundColor(.white)
+                                .offset(x: isPlaying ? 0 : 2)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .tutorialFrame(isTutorialTarget ? "play_first" : "play_\(music.id)")
                 }
-                .tutorialFrame(isTutorialTarget ? "play_first" : "play_\(music.id)")
 
-                // Music Info
+                // 곡 정보
                 VStack(alignment: .leading, spacing: 6) {
                     Text(music.name)
                         .font(.system(size: 16, weight: .semibold))
@@ -291,40 +352,34 @@ struct MusicCard: View {
 
                 Spacer()
 
-                // Export Button
-                Button(action: { showShareSheet = true }) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 18))
-                        .foregroundColor(.white)
-                        .frame(width: 44, height: 44)
-                        .background(
-                            Circle()
-                                .fill(Color.white.opacity(0.1))
-                        )
+                // 공유 버튼 — 일반 모드에서만 표시
+                if !isSelectionMode {
+                    Button(action: { showShareSheet = true }) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 18))
+                            .foregroundColor(.white)
+                            .frame(width: 44, height: 44)
+                            .background(Circle().fill(Color.white.opacity(0.1)))
+                    }
+                    .buttonStyle(.plain)
                 }
-
             }
 
             // Progress Bar
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
-                    // Background
                     RoundedRectangle(cornerRadius: 4)
                         .fill(Color.white.opacity(0.1))
                         .frame(height: 6)
-
-                    // Progress Fill
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    GugakDesign.Colors.obangsaekBlue,
-                                    GugakDesign.Colors.obangsaekRed
-                                ]),
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
+                        .fill(LinearGradient(
+                            gradient: Gradient(colors: [
+                                GugakDesign.Colors.obangsaekBlue,
+                                GugakDesign.Colors.obangsaekRed
+                            ]),
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ))
                         .frame(width: geometry.size.width * progress, height: 6)
                 }
             }
@@ -333,12 +388,29 @@ struct MusicCard: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white.opacity(0.05))
+                .fill(isSelected ? Color.white.opacity(0.10) : Color.white.opacity(0.05))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                        .stroke(
+                            isSelected
+                                ? GugakDesign.Colors.obangsaekBlue.opacity(0.6)
+                                : Color.white.opacity(0.1),
+                            lineWidth: isSelected ? 1.5 : 1
+                        )
                 )
         )
+        .contentShape(RoundedRectangle(cornerRadius: 16))
+        // 선택 모드에서 카드 탭 → 선택 토글
+        .onTapGesture {
+            if isSelectionMode { onToggleSelect() }
+        }
+        // 일반 모드에서 길게 누르면 선택 모드 진입
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.45)
+                .onEnded { _ in onLongPress() }
+        )
+        .animation(.easeInOut(duration: 0.15), value: isSelectionMode)
+        .animation(.easeInOut(duration: 0.15), value: isSelected)
         .sheet(isPresented: $showShareSheet) {
             ShareSheet(items: [fileURL])
         }
@@ -357,8 +429,7 @@ struct ShareSheet: UIViewControllerRepresentable {
     let items: [Any]
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
-        return controller
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}

@@ -13,70 +13,77 @@ struct IntroView: View {
             wadangBackgroundLayer
                 .ignoresSafeArea()
 
-            // Content
-            ScrollView {
-                VStack(spacing: 28) {
-                    Spacer(minLength: 48)
+            // Content — GeometryReader로 가용 크기 파악
+            GeometryReader { geo in
+                ScrollView {
+                    VStack(spacing: 28) {
+                        Spacer(minLength: 48)
 
-                    // App Title with Traditional Style
-                    titleSection
-                        .opacity(showContent ? 1 : 0)
-                        .offset(y: showContent ? 0 : -30)
+                        // App Title with Traditional Style
+                        titleSection
+                            .opacity(showContent ? 1 : 0)
+                            .offset(y: showContent ? 0 : -30)
 
-                    // Main Description with Hanji Style
-                    hanjiDescriptionCard
-                        .padding(.horizontal, 32)
-                        .opacity(showContent ? 1 : 0)
-                        .scaleEffect(showContent ? 1 : 0.95)
-                        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: showContent)
+                        // Main Description with Hanji Style
+                        hanjiDescriptionCard
+                            .padding(.horizontal, 32)
+                            .opacity(showContent ? 1 : 0)
+                            .scaleEffect(showContent ? 1 : 0.95)
+                            .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: showContent)
 
-                    // Two Feature Sections
-                    VStack(spacing: 14) {
+                        // Two Feature Sections
+                        VStack(spacing: 14) {
                             beautyOfKSORiCard
 
-                        traditionalFeatureCard(
-                            title: "K-SORi SoundPad Features",
-                            description: "Experience traditional sounds with intuitive Giwa buttons. Create your own music easily through simple composition and recording functions.",
-                            color: GugakDesign.Colors.obangsaekRed,
-                            icon: "music.note"
-                        )
-                    }
-                    .padding(.horizontal, 32)
-                    .opacity(showContent ? 1 : 0)
-                    .offset(y: showContent ? 0 : 20)
-                    .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.3), value: showContent)
-
-                    // Don't show again checkbox
-                    Button(action: {
-                        dontShowAgain.toggle()
-                    }) {
-                        HStack(spacing: 12) {
-                            Image(systemName: dontShowAgain ? "checkmark.square.fill" : "square")
-                                .font(.system(size: 20))
-                                .foregroundColor(.white.opacity(0.9))
-
-                            Text("Don't show this again")
-                                .font(.system(size: 14))
-                                .foregroundColor(.white.opacity(0.9))
+                            traditionalFeatureCard(
+                                title: "K-SORi SoundPad Features",
+                                description: "Experience traditional sounds with intuitive Giwa buttons. Create your own music easily through simple composition and recording functions.",
+                                color: GugakDesign.Colors.obangsaekRed,
+                                icon: "music.note"
+                            )
                         }
+                        .padding(.horizontal, 32)
+                        .opacity(showContent ? 1 : 0)
+                        .offset(y: showContent ? 0 : 20)
+                        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.3), value: showContent)
+
+                        // Don't show again checkbox
+                        Button(action: {
+                            dontShowAgain.toggle()
+                        }) {
+                            HStack(spacing: 12) {
+                                Image(systemName: dontShowAgain ? "checkmark.square.fill" : "square")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(.white.opacity(0.9))
+
+                                Text("Don't show this again")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.white.opacity(0.9))
+                            }
+                        }
+                        .opacity(showContent ? 1 : 0)
+                        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.4), value: showContent)
+
+                        Spacer(minLength: 18)
+
+                        // Start Button with Traditional Style
+                        startButton
+                            .opacity(showContent ? 1 : 0)
+                            .scaleEffect(showContent ? 1 : 0.9)
+                            .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.45), value: showContent)
+
+                        // Tutorial replay button
+                        tutorialButton
+                            .opacity(showContent ? 1 : 0)
+                            .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.5), value: showContent)
+
+                        Spacer(minLength: 40)
                     }
-                    .opacity(showContent ? 1 : 0)
-                    .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.4), value: showContent)
-
-                    Spacer(minLength: 18)
-
-                    // Start Button with Traditional Style
-                    startButton
-                        .opacity(showContent ? 1 : 0)
-                        .scaleEffect(showContent ? 1 : 0.9)
-                        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.45), value: showContent)
-
-                    // Tutorial replay button
-                    tutorialButton
-                        .opacity(showContent ? 1 : 0)
-                        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.5), value: showContent)
-
-                    Spacer(minLength: 40)
+                    // 콘텐츠 최대 너비 제한 (iPad landscape 대응) + 중앙 정렬
+                    .frame(maxWidth: 600)
+                    .frame(maxWidth: .infinity)
+                    // 화면보다 짧을 때 Spacer가 남는 공간을 균등 분배 → 수직 중앙 정렬
+                    .frame(minHeight: geo.size.height)
                 }
             }
         }
