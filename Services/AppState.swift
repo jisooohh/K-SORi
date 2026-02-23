@@ -22,6 +22,7 @@ class AppState: ObservableObject {
     }
 
     func navigateTo(_ screen: AppScreen) {
+        NotificationCenter.default.post(name: .appStopAllAudio, object: nil)
         withAnimation(.easeInOut(duration: 0.3)) {
             currentScreen = screen
         }

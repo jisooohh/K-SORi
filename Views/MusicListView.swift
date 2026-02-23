@@ -62,6 +62,9 @@ struct MusicListView: View {
         .sheet(isPresented: $showBulkShareSheet) {
             ShareSheet(items: bulkShareItems)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .appStopAllAudio)) { _ in
+            playbackManager.stop()
+        }
     }
 
     private var headerView: some View {

@@ -154,6 +154,9 @@ struct MainView: View {
                 lastRecordingPlayer.setMusic(music)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .appStopAllAudio)) { _ in
+            stopAllForNavigation()
+        }
     }
 
     // MARK: - Top Control Bar
@@ -330,6 +333,17 @@ struct MainView: View {
         if tutorialManager.isActive && tutorialManager.step == .stopButton {
             tutorialManager.advance()
         }
+    }
+
+    private func stopAllForNavigation() {
+        if recordingManager.isRecording {
+            if let music = recordingManager.stopRecording() { appState.addRecordedMusic(music) }
+        }
+        audioPlayerManager.stopAllSounds()
+        activePads.removeAll()
+        pendingPads.removeAll()
+        pendingStopPads.removeAll()
+        lastRecordingPlayer.stop()
     }
 
     private func formatDuration(_ duration: TimeInterval) -> String {
