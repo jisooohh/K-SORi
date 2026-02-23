@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct IntroView: View {
     @EnvironmentObject var appState: AppState
@@ -139,7 +140,7 @@ struct IntroView: View {
                     Text("O")
                         .font(.system(size: 64, weight: .bold, design: .serif))
                         .foregroundColor(.clear)
-                    TaegukkCircle(size: 48)
+                    TaegukkImageView(size: 48)
                 }
 
                 Text("Ri")
@@ -570,55 +571,29 @@ struct TraditionalLineDecoration: Shape {
     }
 }
 
-// MARK: - Taeguk (태극) Circle
+// MARK: - Taeguk Image View
 
-/// Yin-yang style Taeguk symbol used inside the logo O
-struct TaegukkCircle: View {
+/// Loads taeguk.png from app bundle for use inside the logo O
+struct TaegukkImageView: View {
     let size: CGFloat
 
-    private let yangRed  = Color(red: 0.82, green: 0.20, blue: 0.26)
-    private let yinBlue  = Color(red: 0.02, green: 0.33, blue: 0.74)
+    private var uiImage: UIImage? {
+        if let img = UIImage(named: "taeguk") { return img }
+        if let url = Bundle.main.url(forResource: "taeguk", withExtension: "png"),
+           let data = try? Data(contentsOf: url),
+           let img = UIImage(data: data) { return img }
+        return nil
+    }
 
     var body: some View {
-        ZStack {
-            TaegukRegion(isRed: false)
-                .fill(yinBlue)
-            TaegukRegion(isRed: true)
-                .fill(yangRed)
+        if let img = uiImage {
+            Image(uiImage: img)
+                .resizable()
+                .scaledToFit()
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+                .overlay(Circle().stroke(Color.white.opacity(0.65), lineWidth: 1.1))
         }
-        .frame(width: size, height: size)
-        .clipShape(Circle())
-        .overlay(Circle().stroke(Color.white.opacity(0.65), lineWidth: 1.1))
-    }
-}
-
-private struct TaegukRegion: Shape {
-    let isRed: Bool
-
-    func path(in rect: CGRect) -> Path {
-        let r = min(rect.width, rect.height) / 2
-        let cx = rect.midX
-        let cy = rect.midY
-        let smallR = r / 2
-
-        var path = Path()
-
-        if isRed {
-            // Red: top half of big circle + bottom small circle
-            path.addArc(center: CGPoint(x: cx, y: cy), radius: r,
-                        startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false)
-            path.addArc(center: CGPoint(x: cx, y: cy + smallR), radius: smallR,
-                        startAngle: .degrees(0), endAngle: .degrees(180), clockwise: false)
-        } else {
-            // Blue: bottom half of big circle + top small circle
-            path.addArc(center: CGPoint(x: cx, y: cy), radius: r,
-                        startAngle: .degrees(0), endAngle: .degrees(180), clockwise: false)
-            path.addArc(center: CGPoint(x: cx, y: cy - smallR), radius: smallR,
-                        startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false)
-        }
-
-        path.closeSubpath()
-        return path
     }
 }
 

@@ -339,19 +339,25 @@ struct MainView: View {
 
 // MARK: - Bundle Image Loader
 
-/// Resources 폴더에서 PNG를 안정적으로 로드하는 헬퍼 뷰
+/// Resources 폴더에서 PNG를 안정적으로 로드하는 헬퍼 뷰 (흰 배경 자동 제거)
 struct InstrumentImage: View {
     let name: String
 
-    private var uiImage: UIImage? {
-        if let img = UIImage(named: name) { return img }
+    private static var imageCache: [String: UIImage] = [:]
 
+    private var uiImage: UIImage? {
+        if let cached = InstrumentImage.imageCache[name] { return cached }
+        let processed = loadRaw()?.removingWhiteBackground()
+        InstrumentImage.imageCache[name] = processed
+        return processed
+    }
+
+    private func loadRaw() -> UIImage? {
+        if let img = UIImage(named: name) { return img }
         if let url = Bundle.main.url(forResource: name, withExtension: "png", subdirectory: "Resources"),
            let img = UIImage(contentsOfFile: url.path) { return img }
-
         if let url = Bundle.main.url(forResource: name, withExtension: "png"),
            let img = UIImage(contentsOfFile: url.path) { return img }
-
         if let base = Bundle.main.resourcePath {
             for suffix in ["Resources/\(name).png", "\(name).png"] {
                 let path = (base as NSString).appendingPathComponent(suffix)
@@ -367,6 +373,69 @@ struct InstrumentImage: View {
         } else {
             Image(systemName: "music.note").resizable()
         }
+    }
+}
+
+// MARK: - UIImage White Background Removal
+
+extension UIImage {
+    /// 경계에서 flood fill: 어두운 픽셀(악기 아웃라인)이 나타나기 직전까지 모든 픽셀 제거
+    func removingWhiteBackground() -> UIImage {
+        guard let cgImage = self.cgImage else { return self }
+        let W = cgImage.width, H = cgImage.height
+        let bpr = 4 * W
+        var px = [UInt8](repeating: 0, count: H * bpr)
+        guard let ctx = CGContext(
+            data: &px, width: W, height: H,
+            bitsPerComponent: 8, bytesPerRow: bpr,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return self }
+        ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: W, height: H))
+
+        // max(R,G,B) < 0.18 → 어두운 픽셀 = 악기 아웃라인 → flood fill 중단
+        func isDark(_ i: Int) -> Bool {
+            let p = i * 4
+            let r = Float(px[p]) / 255
+            let g = Float(px[p+1]) / 255
+            let b = Float(px[p+2]) / 255
+            return max(r, max(g, b)) < 0.18
+        }
+
+        // 4변 경계에서 flood fill: 어둡지 않으면 제거, 어두우면 중단
+        var toRemove = [Bool](repeating: false, count: W * H)
+        var visited  = [Bool](repeating: false, count: W * H)
+        var stack    = [Int]()
+        stack.reserveCapacity(W * 2 + H * 2)
+
+        for x in 0..<W {
+            stack.append(x)
+            stack.append((H - 1) * W + x)
+        }
+        for y in 0..<H {
+            stack.append(y * W)
+            stack.append(y * W + W - 1)
+        }
+
+        while let idx = stack.popLast() {
+            if visited[idx] { continue }
+            visited[idx] = true
+            if isDark(idx) { continue }   // 어두운 픽셀 = 아웃라인 → 중단, 보존
+            toRemove[idx] = true
+            let x = idx % W, y = idx / W
+            if x > 0   { stack.append(idx - 1) }
+            if x < W-1 { stack.append(idx + 1) }
+            if y > 0   { stack.append(idx - W) }
+            if y < H-1 { stack.append(idx + W) }
+        }
+
+        // 제거 대상 픽셀 → 완전 투명
+        for idx in 0..<(W * H) where toRemove[idx] {
+            px[idx * 4 + 3] = 0
+        }
+
+        guard let newCG = ctx.makeImage() else { return self }
+        return UIImage(cgImage: newCG, scale: scale, orientation: imageOrientation)
     }
 }
 
