@@ -186,6 +186,7 @@ class AudioPlayerManager: ObservableObject {
             engineManager.engine.connect(node, to: engineManager.mainMixer, format: format)
             engineManager.startEngineIfNeeded()
 
+            node.volume = sound.category == .rhythm ? 1.5 : 1.0
             node.scheduleBuffer(buffer, at: nil, options: [.loops], completionHandler: nil)
             node.play()
 
