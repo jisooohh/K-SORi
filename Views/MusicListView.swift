@@ -5,6 +5,10 @@ struct MusicListView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var tutorialManager: TutorialManager
     @StateObject private var playbackManager = MusicPlaybackManager()
+    @State private var selectedIDs: Set<UUID> = []
+    @State private var showBulkShareSheet = false
+    @State private var bulkShareItems: [Any] = []
+    @State private var showBulkDeleteConfirm = false
 
     var body: some View {
         ZStack {
@@ -21,33 +25,42 @@ struct MusicListView: View {
                 if appState.recordedMusics.isEmpty {
                     emptyStateView
                 } else {
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            ForEach(Array(appState.recordedMusics.enumerated()), id: \.element.id) { index, music in
-                                MusicCard(
-                                    music: music,
-                                    isPlaying: playbackManager.currentlyPlaying?.id == music.id,
-                                    currentTime: playbackManager.currentlyPlaying?.id == music.id ? playbackManager.currentTime : 0,
-                                    isTutorialTarget: index == 0 && tutorialManager.isActive && tutorialManager.step == .playButton,
-                                    onTogglePlay: {
-                                        if playbackManager.currentlyPlaying?.id == music.id {
-                                            playbackManager.stop()
-                                        } else {
-                                            playbackManager.play(music)
-                                            if index == 0 && tutorialManager.isActive && tutorialManager.step == .playButton {
-                                                tutorialManager.advance()
-                                            }
+                    List {
+                        ForEach(appState.recordedMusics) { music in
+                            let isFirst = appState.recordedMusics.first?.id == music.id
+                            MusicCard(
+                                music: music,
+                                isPlaying: playbackManager.currentlyPlaying?.id == music.id,
+                                currentTime: playbackManager.currentlyPlaying?.id == music.id ? playbackManager.currentTime : 0,
+                                isTutorialTarget: isFirst && tutorialManager.isActive && tutorialManager.step == .playButton,
+                                onTogglePlay: {
+                                    if playbackManager.currentlyPlaying?.id == music.id {
+                                        playbackManager.stop()
+                                    } else {
+                                        playbackManager.play(music)
+                                        if isFirst && tutorialManager.isActive && tutorialManager.step == .playButton {
+                                            tutorialManager.advance()
                                         }
-                                    },
-                                    onDelete: { deleteMusic(music) }
-                                )
-                            }
+                                    }
+                                }
+                            )
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                            .listRowSeparator(.hidden)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 20)
+                        .onDelete(perform: deleteMusicAtOffsets)
                     }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
                 }
             }
+        }
+        .confirmationDialog("Delete selected recordings?", isPresented: $showBulkDeleteConfirm, titleVisibility: .visible) {
+            Button("Delete", role: .destructive) { deleteSelectedMusics() }
+            Button("Cancel", role: .cancel) {}
+        }
+        .sheet(isPresented: $showBulkShareSheet) {
+            ShareSheet(items: bulkShareItems)
         }
     }
 
@@ -72,6 +85,20 @@ struct MusicListView: View {
             Text("\(appState.recordedMusics.count) tracks")
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(.white.opacity(0.7))
+
+            Menu {
+                Button("Select All") { selectAll() }
+                Button("Clear Selection") { selectedIDs.removeAll() }
+                Button("Share Selected") { shareSelectedMusics() }
+                    .disabled(selectedIDs.isEmpty)
+                Button("Delete Selected", role: .destructive) { showBulkDeleteConfirm = true }
+                    .disabled(selectedIDs.isEmpty)
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.system(size: 18))
+                    .foregroundColor(.white.opacity(0.85))
+                    .frame(width: 44, height: 44)
+            }
         }
     }
 
@@ -106,6 +133,34 @@ struct MusicListView: View {
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let audioURL = documentsPath.appendingPathComponent(music.fileName)
         try? FileManager.default.removeItem(at: audioURL)
+    }
+
+    private func deleteMusicAtOffsets(_ offsets: IndexSet) {
+        for index in offsets {
+            let music = appState.recordedMusics[index]
+            deleteMusic(music)
+        }
+    }
+
+    private func selectAll() {
+        selectedIDs = Set(appState.recordedMusics.map { $0.id })
+    }
+
+    private func shareSelectedMusics() {
+        let items = appState.recordedMusics
+            .filter { selectedIDs.contains($0.id) }
+            .map { FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent($0.fileName) }
+        guard !items.isEmpty else { return }
+        bulkShareItems = items
+        showBulkShareSheet = true
+    }
+
+    private func deleteSelectedMusics() {
+        let musics = appState.recordedMusics.filter { selectedIDs.contains($0.id) }
+        for music in musics {
+            deleteMusic(music)
+        }
+        selectedIDs.removeAll()
     }
 }
 
@@ -184,9 +239,7 @@ struct MusicCard: View {
     let currentTime: TimeInterval
     var isTutorialTarget: Bool = false
     let onTogglePlay: () -> Void
-    let onDelete: () -> Void
 
-    @State private var showDeleteConfirmation = false
     @State private var showShareSheet = false
 
     private var progress: Double {
@@ -247,17 +300,6 @@ struct MusicCard: View {
                         )
                 }
 
-                // Delete Button
-                Button(action: { showDeleteConfirmation = true }) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 18))
-                        .foregroundColor(GugakDesign.Colors.obangsaekRed)
-                        .frame(width: 44, height: 44)
-                        .background(
-                            Circle()
-                                .fill(Color.white.opacity(0.1))
-                        )
-                }
             }
 
             // Progress Bar
@@ -294,10 +336,6 @@ struct MusicCard: View {
                         .stroke(Color.white.opacity(0.1), lineWidth: 1)
                 )
         )
-        .confirmationDialog("Delete this recording?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
-            Button("Delete", role: .destructive, action: onDelete)
-            Button("Cancel", role: .cancel) {}
-        }
         .sheet(isPresented: $showShareSheet) {
             ShareSheet(items: [fileURL])
         }

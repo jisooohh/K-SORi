@@ -44,7 +44,10 @@ final class LastRecordingPlayer: NSObject, ObservableObject {
     }
 
     func pause() {
-        player?.pause()
+        if let player {
+            remainingTime = max(0, player.duration - player.currentTime)
+            player.pause()
+        }
         isPlaying = false
         stopCountdown()
     }
@@ -158,7 +161,7 @@ struct MainView: View {
     private var timerValue: TimeInterval {
         if recordingManager.isRecording {
             return recordingManager.recordingDuration
-        } else if lastRecordingPlayer.isPlaying {
+        } else if lastRecordingPlayer.music != nil {
             return lastRecordingPlayer.remainingTime
         } else {
             return 0
@@ -236,19 +239,10 @@ struct MainView: View {
                 // Play button — appears after a recording is saved
                 if showPlayButton {
                     Button(action: { lastRecordingPlayer.toggle() }) {
-                        Circle()
-                            .fill(Color.white.opacity(0.15))
-                            .frame(width: 28, height: 28)
-                            .overlay(
-                                Image(systemName: lastRecordingPlayer.isPlaying ? "pause.fill" : "play.fill")
-                                    .font(.system(size: 11, weight: .bold))
-                                    .foregroundColor(.white)
-                            )
-                            .overlay(Circle().stroke(Color.white.opacity(0.4), lineWidth: 1))
-                            .shadow(
-                                color: lastRecordingPlayer.isPlaying ? Color.green.opacity(0.6) : .clear,
-                                radius: lastRecordingPlayer.isPlaying ? 8 : 0
-                            )
+                        Image(systemName: lastRecordingPlayer.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundColor(Color(red: 0.09, green: 0.45, blue: 0.21))
+                            .frame(width: 32, height: 32)
                     }
                     .transition(.scale(scale: 0.5).combined(with: .opacity))
                 }

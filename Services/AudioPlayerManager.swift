@@ -6,9 +6,10 @@ import SwiftUI
 class AudioPlayerManager: ObservableObject {
     // MARK: - Properties
 
-    private var audioPlayers: [Int: AVAudioPlayer] = [:]
+    private let engineManager = AudioEngineManager.shared
+    private var playerNodes: [Int: AVAudioPlayerNode] = [:]
+    private var audioBuffers: [Int: AVAudioPCMBuffer] = [:]
     private var pendingPads: Set<Int> = [] // Pads waiting for quantization
-    private var meteringTimer: Timer?
 
     @Published var currentAmplitudes: [Float] = Array(repeating: 0.0, count: Constants.totalPads)
     @Published var globalAmplitude: Float = 0.0
@@ -20,30 +21,11 @@ class AudioPlayerManager: ObservableObject {
     // MARK: - Initialization
 
     init() {
-        setupAudioSession()
-        startMetering()
+        engineManager.startEngineIfNeeded()
     }
 
     func setBeatEngine(_ engine: BeatEngine) {
         self.beatEngine = engine
-    }
-
-    private func setupAudioSession() {
-        do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
-            try session.setActive(true)
-        } catch {
-            print("❌ Audio session setup failed: \(error.localizedDescription)")
-        }
-    }
-
-    private func startMetering() {
-        meteringTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.updateAllAmplitudes()
-            }
-        }
     }
 
     // MARK: - Quantized Toggle
@@ -121,14 +103,37 @@ class AudioPlayerManager: ObservableObject {
         }
 
         do {
-            let player = try AVAudioPlayer(contentsOf: finalURL)
-            player.isMeteringEnabled = true
-            player.numberOfLoops = -1 // Infinite loop
-            player.prepareToPlay()
-            player.volume = 1.0
-            player.play()
+            let file = try AVAudioFile(forReading: finalURL)
+            let format = file.processingFormat
+            let frameCount = AVAudioFrameCount(file.length)
 
-            audioPlayers[sound.position] = player
+            let buffer: AVAudioPCMBuffer
+            if let cached = audioBuffers[sound.position],
+               cached.frameCapacity >= frameCount,
+               cached.format.sampleRate == format.sampleRate,
+               cached.format.channelCount == format.channelCount {
+                buffer = cached
+            } else {
+                guard let newBuffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else {
+                    print("❌ Failed to create PCM buffer: \(sound.fileName)")
+                    return
+                }
+                audioBuffers[sound.position] = newBuffer
+                buffer = newBuffer
+            }
+
+            buffer.frameLength = 0
+            try file.read(into: buffer)
+
+            let node = AVAudioPlayerNode()
+            engineManager.engine.attach(node)
+            engineManager.engine.connect(node, to: engineManager.mainMixer, format: format)
+            engineManager.startEngineIfNeeded()
+
+            node.scheduleBuffer(buffer, at: nil, options: [.loops], completionHandler: nil)
+            node.play()
+
+            playerNodes[sound.position] = node
             print("🎵 Playing: \(sound.fileName) (Loop: ♾️)")
         } catch {
             print("❌ Playback failed: \(error.localizedDescription)")
@@ -136,11 +141,12 @@ class AudioPlayerManager: ObservableObject {
     }
 
     func stopSound(at position: Int) {
-        if let player = audioPlayers[position] {
-            player.stop()
+        if let node = playerNodes[position] {
+            node.stop()
+            engineManager.engine.detach(node)
             print("⏹️ Stopped: Position \(position)")
         }
-        audioPlayers.removeValue(forKey: position)
+        playerNodes.removeValue(forKey: position)
         currentAmplitudes[position] = 0.0
 
         // Remove from pending if was waiting
@@ -148,8 +154,11 @@ class AudioPlayerManager: ObservableObject {
     }
 
     func stopAllSounds() {
-        audioPlayers.values.forEach { $0.stop() }
-        audioPlayers.removeAll()
+        for node in playerNodes.values {
+            node.stop()
+            engineManager.engine.detach(node)
+        }
+        playerNodes.removeAll()
         pendingPads.removeAll()
         currentAmplitudes = Array(repeating: 0.0, count: Constants.totalPads)
         globalAmplitude = 0.0
@@ -157,10 +166,7 @@ class AudioPlayerManager: ObservableObject {
     }
 
     func isPlaying(at position: Int) -> Bool {
-        if let player = audioPlayers[position] {
-            return player.isPlaying
-        }
-        return false
+        playerNodes[position]?.isPlaying ?? false
     }
 
     func isPending(at position: Int) -> Bool {
@@ -169,51 +175,6 @@ class AudioPlayerManager: ObservableObject {
 
     // MARK: - Metering
 
-    private func updateAllAmplitudes() {
-        var maxAmplitude: Float = 0.0
-
-        for (position, player) in audioPlayers where player.isPlaying {
-            player.updateMeters()
-
-            let avgPower = player.averagePower(forChannel: 0)
-            let peakPower = player.peakPower(forChannel: 0)
-
-            let normalizedAvg = pow(10, avgPower / 20)
-            let normalizedPeak = pow(10, peakPower / 20)
-
-            let amplitude = (normalizedAvg * 0.6 + normalizedPeak * 0.4)
-            currentAmplitudes[position] = max(0.0, min(1.0, amplitude))
-            maxAmplitude = max(maxAmplitude, amplitude)
-        }
-
-        // Smooth global amplitude
-        let targetGlobal = maxAmplitude
-        globalAmplitude = globalAmplitude * 0.85 + targetGlobal * 0.15
-
-        // Update frequency bands
-        updateFrequencyBands()
-    }
-
-    private func updateFrequencyBands() {
-        let activeCount = audioPlayers.values.filter { $0.isPlaying }.count
-
-        if activeCount > 0 {
-            for i in 0..<frequencyBands.count {
-                let baseAmplitude = globalAmplitude
-                let variation = Float.random(in: -0.2...0.2)
-                let bandAmplitude = baseAmplitude + variation
-
-                let targetValue = max(0.0, min(1.0, bandAmplitude))
-                frequencyBands[i] = frequencyBands[i] * 0.7 + targetValue * 0.3
-            }
-        } else {
-            for i in 0..<frequencyBands.count {
-                frequencyBands[i] *= 0.85
-            }
-        }
-    }
-
-    deinit {
-        meteringTimer?.invalidate()
-    }
+    private func updateAllAmplitudes() {}
+    private func updateFrequencyBands() {}
 }

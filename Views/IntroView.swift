@@ -5,7 +5,6 @@ struct IntroView: View {
     @EnvironmentObject var tutorialManager: TutorialManager
     @State private var showContent = false
     @State private var dontShowAgain = false
-    @State private var rotationAngle: Double = 0
 
     var body: some View {
         ZStack {
@@ -15,8 +14,8 @@ struct IntroView: View {
 
             // Content
             ScrollView {
-                VStack(spacing: 50) {
-                    Spacer(minLength: 60)
+                VStack(spacing: 28) {
+                    Spacer(minLength: 48)
 
                     // App Title with Traditional Style
                     titleSection
@@ -31,11 +30,11 @@ struct IntroView: View {
                         .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: showContent)
 
                     // Two Feature Sections
-                    VStack(spacing: 20) {
+                    VStack(spacing: 14) {
                             beautyOfKSORiCard
 
                         traditionalFeatureCard(
-                            title: "K-SORi Features",
+                            title: "K-SORi SoundPad Features",
                             description: "Experience traditional sounds with intuitive Giwa buttons. Create your own music easily through simple composition and recording functions.",
                             color: GugakDesign.Colors.obangsaekRed,
                             icon: "music.note"
@@ -63,6 +62,8 @@ struct IntroView: View {
                     .opacity(showContent ? 1 : 0)
                     .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.4), value: showContent)
 
+                    Spacer(minLength: 18)
+
                     // Start Button with Traditional Style
                     startButton
                         .opacity(showContent ? 1 : 0)
@@ -74,17 +75,13 @@ struct IntroView: View {
                         .opacity(showContent ? 1 : 0)
                         .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.5), value: showContent)
 
-                    Spacer(minLength: 60)
+                    Spacer(minLength: 40)
                 }
             }
         }
         .onAppear {
             withAnimation {
                 showContent = true
-            }
-            // Slow rotation animation for wadang patterns
-            withAnimation(.linear(duration: 60).repeatForever(autoreverses: false)) {
-                rotationAngle = 360
             }
         }
     }
@@ -93,32 +90,27 @@ struct IntroView: View {
 
     private var wadangBackgroundLayer: some View {
         ZStack {
-            // Dark traditional background
-            GugakDesign.Colors.darkNight
+            // Warm traditional background
+            Color(red: 0.18, green: 0.14, blue: 0.10)
                 .ignoresSafeArea()
 
-            // Wadang patterns scattered across background
+            // Centered Wadang medallion (vector, gold)
             GeometryReader { geometry in
-                ForEach(0..<12, id: \.self) { index in
-                    let color = obangsaekColor(for: index)
-                    let size = wadangSize(for: index, in: geometry.size)
-                    let position = wadangPosition(for: index, in: geometry.size)
-
-                    WadangPattern(style: wadangStyle(for: index))
-                        .fill(color.opacity(0.08))
-                        .frame(width: size, height: size)
-                        .position(position)
-                        .rotationEffect(.degrees(rotationAngle * rotationMultiplier(for: index)))
-                        .blur(radius: 1)
-                }
+                let minSide = min(geometry.size.width, geometry.size.height)
+                let size = minSide * 0.62
+                let gold = Color(red: 0.78, green: 0.64, blue: 0.28)
+                WadangMedallion()
+                    .stroke(gold.opacity(0.28), lineWidth: size * 0.06)
+                    .frame(width: size, height: size)
+                    .position(x: geometry.size.width * 0.5, y: geometry.size.height * 0.45)
             }
 
             // Overlay gradient for depth
             LinearGradient(
                 gradient: Gradient(colors: [
-                    Color.black.opacity(0.4),
-                    Color.black.opacity(0.1),
-                    Color.black.opacity(0.4)
+                    Color.black.opacity(0.45),
+                    Color.black.opacity(0.12),
+                    Color.black.opacity(0.45)
                 ]),
                 startPoint: .top,
                 endPoint: .bottom
@@ -156,10 +148,10 @@ struct IntroView: View {
             }
             .shadow(color: GugakDesign.Colors.obangsaekRed.opacity(0.3), radius: 10)
 
-            Text("Korean Sound Origami")
+            Text("Korean Traditional SoundPad")
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(.white.opacity(0.8))
-                .tracking(2)
+                .tracking(1.4)
 
             TraditionalLineDecoration()
                 .stroke(GugakDesign.Colors.obangsaekBlue, lineWidth: 2)
@@ -352,7 +344,7 @@ struct IntroView: View {
     // MARK: - Beauty of K-SORi Card (with instrument images)
 
     private var beautyOfKSORiCard: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 10) {
             HStack(spacing: 16) {
                 ZStack {
                     WadangPattern(style: .lotus)
@@ -375,24 +367,24 @@ struct IntroView: View {
             }
 
             // 5 representative instrument images
-            HStack(spacing: 4) {
+            HStack(spacing: 1) {
                 ForEach(Constants.SoundCategory.allCases, id: \.self) { category in
-                    VStack(spacing: 5) {
+                    VStack(spacing: 2) {
                         InstrumentImage(name: category.instrumentImageName)
                             .scaledToFit()
-                            .frame(height: 58)
+                            .frame(height: 144)
                             .brightness(-0.05)
                             .saturation(0.85)
-                        Text(category.instrumentName)
-                            .font(.system(size: 9, weight: .medium))
+                        Text(category.instrumentNameEnglish)
+                            .font(.system(size: 10, weight: .semibold))
                             .foregroundColor(.white.opacity(0.7))
                     }
                     .frame(maxWidth: .infinity)
                 }
             }
-            .padding(.top, 2)
+            .padding(.top, 1)
         }
-        .padding(20)
+        .padding(16)
         .background(
             ZStack {
                 RoundedRectangle(cornerRadius: 16).fill(Color.white.opacity(0.03))
@@ -430,46 +422,6 @@ struct IntroView: View {
         }
     }
 
-    // MARK: - Helper Functions
-
-    private func obangsaekColor(for index: Int) -> Color {
-        let colors = [
-            GugakDesign.Colors.obangsaekBlue,
-            GugakDesign.Colors.obangsaekRed,
-            GugakDesign.Colors.obangsaekYellow,
-            GugakDesign.Colors.obangsaekWhite,
-            GugakDesign.Colors.obangsaekBlack
-        ]
-        return colors[index % colors.count]
-    }
-
-    private func wadangStyle(for index: Int) -> WadangPatternStyle {
-        let styles: [WadangPatternStyle] = [.lotus, .geometric, .circular]
-        return styles[index % styles.count]
-    }
-
-    private func wadangSize(for index: Int, in size: CGSize) -> CGFloat {
-        let baseSizes: [CGFloat] = [120, 100, 80, 150, 90, 110, 130, 95, 105, 115, 85, 125]
-        return baseSizes[index % baseSizes.count]
-    }
-
-    private func wadangPosition(for index: Int, in size: CGSize) -> CGPoint {
-        // Distribute wadang patterns across the screen
-        let positions: [(x: CGFloat, y: CGFloat)] = [
-            (0.15, 0.1), (0.85, 0.15), (0.25, 0.25),
-            (0.75, 0.3), (0.1, 0.4), (0.9, 0.45),
-            (0.2, 0.55), (0.8, 0.65), (0.15, 0.75),
-            (0.85, 0.8), (0.3, 0.9), (0.7, 0.92)
-        ]
-        let pos = positions[index % positions.count]
-        return CGPoint(x: size.width * pos.x, y: size.height * pos.y)
-    }
-
-    private func rotationMultiplier(for index: Int) -> Double {
-        // Different rotation speeds for visual interest
-        let multipliers: [Double] = [0.3, -0.5, 0.2, -0.4, 0.6, -0.3, 0.4, -0.2, 0.5, -0.6, 0.35, -0.45]
-        return multipliers[index % multipliers.count]
-    }
 }
 
 // MARK: - Wadang Pattern Shape
@@ -624,57 +576,104 @@ struct TraditionalLineDecoration: Shape {
 struct TaegukkCircle: View {
     let size: CGFloat
 
-    private let yangRed  = Color(red: 0.95, green: 0.2,  blue: 0.2)
-    private let yinBlue  = Color(red: 0.2,  green: 0.5,  blue: 0.9)
+    private let yangRed  = Color(red: 0.82, green: 0.20, blue: 0.26)
+    private let yinBlue  = Color(red: 0.02, green: 0.33, blue: 0.74)
 
     var body: some View {
         ZStack {
-            // 1. Yin (blue) base — full circle
-            Circle().fill(yinBlue)
-
-            // 2. Yang (red) — right half
-            Circle().fill(yangRed)
-                .clipShape(TaegukkHalfClip(side: .right))
-
-            // 3. Yin bump: blue small circle on top (S-curve upper half)
-            Circle().fill(yinBlue)
-                .frame(width: size * 0.5, height: size * 0.5)
-                .offset(y: -size * 0.25)
-
-            // 4. Yang bump: red small circle on bottom (S-curve lower half)
-            Circle().fill(yangRed)
-                .frame(width: size * 0.5, height: size * 0.5)
-                .offset(y: size * 0.25)
-
-            // 5. Yang seed dot in yin bump
-            Circle().fill(yangRed)
-                .frame(width: size * 0.17, height: size * 0.17)
-                .offset(y: -size * 0.25)
-
-            // 6. Yin seed dot in yang bump
-            Circle().fill(yinBlue)
-                .frame(width: size * 0.17, height: size * 0.17)
-                .offset(y: size * 0.25)
+            TaegukRegion(isRed: false)
+                .fill(yinBlue)
+            TaegukRegion(isRed: true)
+                .fill(yangRed)
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
-        .overlay(Circle().stroke(Color.white.opacity(0.75), lineWidth: 1.5))
+        .overlay(Circle().stroke(Color.white.opacity(0.65), lineWidth: 1.1))
     }
 }
 
-private struct TaegukkHalfClip: Shape {
-    enum Side { case left, right }
-    let side: Side
+private struct TaegukRegion: Shape {
+    let isRed: Bool
 
     func path(in rect: CGRect) -> Path {
-        switch side {
-        case .right:
-            return Path(CGRect(x: rect.midX, y: rect.minY,
-                               width: rect.width / 2, height: rect.height))
-        case .left:
-            return Path(CGRect(x: rect.minX, y: rect.minY,
-                               width: rect.width / 2, height: rect.height))
+        let r = min(rect.width, rect.height) / 2
+        let cx = rect.midX
+        let cy = rect.midY
+        let smallR = r / 2
+
+        var path = Path()
+
+        if isRed {
+            // Red: top half of big circle + bottom small circle
+            path.addArc(center: CGPoint(x: cx, y: cy), radius: r,
+                        startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false)
+            path.addArc(center: CGPoint(x: cx, y: cy + smallR), radius: smallR,
+                        startAngle: .degrees(0), endAngle: .degrees(180), clockwise: false)
+        } else {
+            // Blue: bottom half of big circle + top small circle
+            path.addArc(center: CGPoint(x: cx, y: cy), radius: r,
+                        startAngle: .degrees(0), endAngle: .degrees(180), clockwise: false)
+            path.addArc(center: CGPoint(x: cx, y: cy - smallR), radius: smallR,
+                        startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false)
         }
+
+        path.closeSubpath()
+        return path
+    }
+}
+
+// MARK: - Wadang Medallion (Vector)
+
+struct WadangMedallion: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+
+        let w = rect.width
+        let h = rect.height
+        let inset = min(w, h) * 0.08
+        let line = min(w, h) * 0.12
+        let r = min(w, h) / 2 - inset
+        let cx = rect.midX
+        let cy = rect.midY
+
+        // Outer circle
+        path.addEllipse(in: CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2))
+
+        let s = line
+        let d = r - s
+
+        func move(_ x: CGFloat, _ y: CGFloat) { path.move(to: CGPoint(x: x, y: y)) }
+        func lineTo(_ x: CGFloat, _ y: CGFloat) { path.addLine(to: CGPoint(x: x, y: y)) }
+
+        // Vertical spine
+        move(cx, cy - d)
+        lineTo(cx, cy + d)
+
+        // Horizontal mid bar
+        move(cx - d, cy)
+        lineTo(cx + d, cy)
+
+        // Upper left
+        move(cx - d, cy - s)
+        lineTo(cx - s, cy - s)
+        lineTo(cx - s, cy - d)
+
+        // Upper right
+        move(cx + d, cy - s)
+        lineTo(cx + s, cy - s)
+        lineTo(cx + s, cy - d)
+
+        // Lower left
+        move(cx - d, cy + s)
+        lineTo(cx - s, cy + s)
+        lineTo(cx - s, cy + d)
+
+        // Lower right
+        move(cx + d, cy + s)
+        lineTo(cx + s, cy + s)
+        lineTo(cx + s, cy + d)
+
+        return path
     }
 }
 

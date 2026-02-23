@@ -16,6 +16,7 @@ let package = Package(
         .iOSApplication(
             name: "KSORi",
             targets: ["AppModule"],
+            bundleIdentifier: ".ksori",
             teamIdentifier: "6LABR3CRRD",
             displayVersion: "1.0",
             bundleVersion: "1",

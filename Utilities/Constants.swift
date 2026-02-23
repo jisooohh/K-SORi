@@ -54,6 +54,17 @@ enum Constants {
             }
         }
 
+        // 대표 악기 이름 (영문)
+        var instrumentNameEnglish: String {
+            switch self {
+            case .melody:     return "Haegeum"
+            case .percussion: return "Soribuk"
+            case .rhythm:     return "Janggu"
+            case .voice:      return "Buchae"
+            case .base:       return "Geomungo"
+            }
+        }
+
         // 대표 악기 이미지 파일명 (Resources/)
         var instrumentImageName: String {
             switch self {

@@ -1,8 +1,7 @@
 import AVFoundation
-import ReplayKit
 import SwiftUI
 
-/// Records only the app's internal audio output (no microphone) using ReplayKit.
+/// Records only the app's internal audio output (no microphone) using AVAudioEngine.
 @MainActor
 class RecordingManager: ObservableObject {
 
@@ -15,9 +14,10 @@ class RecordingManager: ObservableObject {
 
     // MARK: - Private
 
-    private var assetWriter: AVAssetWriter?
-    private var audioWriterInput: AVAssetWriterInput?
-    private var sessionStarted = false
+    private let engineManager = AudioEngineManager.shared
+    private var recordingFile: AVAudioFile?
+    private var recordingFormat: AVAudioFormat?
+    private var tapInstalled = false
     private var currentURL: URL?
     private var recordingStartTime: Date?
     private var recordingTimer: Timer?
@@ -26,46 +26,31 @@ class RecordingManager: ObservableObject {
 
     func startRecording() -> Bool {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let url = docs.appendingPathComponent("recording_\(UUID().uuidString).m4a")
+        let url = docs.appendingPathComponent("recording_\(UUID().uuidString).caf")
         currentURL = url
-        sessionStarted = false
+        engineManager.startEngineIfNeeded()
 
-        // Configure AVAssetWriter for AAC output
+        let format = engineManager.mainMixer.outputFormat(forBus: 0)
+        recordingFormat = format
+
         do {
-            let writer = try AVAssetWriter(outputURL: url, fileType: .m4a)
-            let audioSettings: [String: Any] = [
-                AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-                AVSampleRateKey: 44100,
-                AVNumberOfChannelsKey: 2,
-                AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
-            ]
-            let input = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
-            input.expectsMediaDataInRealTime = true
-            writer.add(input)
-            writer.startWriting()
-            assetWriter = writer
-            audioWriterInput = input
+            recordingFile = try AVAudioFile(forWriting: url, settings: format.settings)
         } catch {
-            print("❌ RecordingManager AssetWriter setup: \(error)")
+            print("❌ RecordingManager file setup failed: \(error)")
             return false
         }
 
-        // Start ReplayKit capture — mic OFF, app audio only
-        let rp = RPScreenRecorder.shared()
-        rp.isMicrophoneEnabled = false
-        rp.startCapture(handler: { [weak self] sampleBuffer, bufferType, error in
-            guard error == nil, bufferType == .audioApp else { return }
-            Task { @MainActor [weak self] in
-                self?.handleAudioBuffer(sampleBuffer)
-            }
-        }, completionHandler: { [weak self] error in
-            if let error {
-                print("❌ ReplayKit startCapture: \(error)")
-                Task { @MainActor [weak self] in
-                    self?.isRecording = false
+        if !tapInstalled {
+            engineManager.mainMixer.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+                guard let self, let file = self.recordingFile else { return }
+                do {
+                    try file.write(from: buffer)
+                } catch {
+                    print("❌ RecordingManager write failed: \(error)")
                 }
             }
-        })
+            tapInstalled = true
+        }
 
         isRecording = true
         recordingStartTime = Date()
@@ -78,24 +63,6 @@ class RecordingManager: ObservableObject {
             }
         }
         return true
-    }
-
-    // MARK: - Handle Audio Buffers (called on Main Actor)
-
-    private func handleAudioBuffer(_ buffer: CMSampleBuffer) {
-        guard let writer = assetWriter,
-              let input = audioWriterInput,
-              writer.status == .writing else { return }
-
-        if !sessionStarted {
-            let pts = CMSampleBufferGetPresentationTimeStamp(buffer)
-            writer.startSession(atSourceTime: pts)
-            sessionStarted = true
-        }
-
-        if input.isReadyForMoreMediaData {
-            input.append(buffer)
-        }
     }
 
     // MARK: - Stop
@@ -111,38 +78,23 @@ class RecordingManager: ObservableObject {
         recordingTimer?.invalidate()
         recordingTimer = nil
 
-        // Stop ReplayKit
-        RPScreenRecorder.shared().stopCapture { error in
-            if let error { print("❌ stopCapture: \(error)") }
-        }
-
-        // Finish writing — notify via lastSavedMusic when done
-        let capturedInput = audioWriterInput
-        let capturedWriter = assetWriter
         let fileName = url.lastPathComponent
-
-        capturedInput?.markAsFinished()
-        capturedWriter?.finishWriting { [weak self] in
-            let music = RecordedMusic(
-                name: "My Music \(DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .short))",
-                duration: duration,
-                fileName: fileName
-            )
-            Task { @MainActor [weak self] in
-                self?.lastSavedMusic = music
-            }
+        if tapInstalled {
+            engineManager.mainMixer.removeTap(onBus: 0)
+            tapInstalled = false
         }
-
-        assetWriter = nil
-        audioWriterInput = nil
-        sessionStarted = false
+        recordingFile = nil
+        recordingFormat = nil
 
         // Return immediately for appState.addRecordedMusic (file will be ready shortly)
-        return RecordedMusic(
+        let music = RecordedMusic(
             name: "My Music \(DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .short))",
             duration: duration,
             fileName: fileName
         )
+
+        lastSavedMusic = music
+        return music
     }
 
     // MARK: - Helpers
