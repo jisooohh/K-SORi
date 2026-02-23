@@ -7,20 +7,20 @@ struct SoundPad {
         self.sounds = SoundPad.createDefaultSounds()
     }
 
-    // 버튼 배치: M(6), P(6), R(5), V(4), B(4) = 25개
+    // 버튼 배치: M(6), P(5), R(6), V(4), B(4) = 25개
     //
-    // Row 0 (pos 0-4)  : M M M M M       ← 해금 5개
-    // Row 1 (pos 5-9)  : P P P P P       ← 소리북 5개
-    // Row 2 (pos 10-14): R R R R R       ← 장구 5개
-    // Row 3 (pos 15-19): V V M V V       ← 부채 4개 + 해금(borrowed) at col 2
-    // Row 4 (pos 20-24): B B B B P       ← 거문고 4개 + 소리북(borrowed) at col 4
+    // Row 0 (pos 0-4)  : M1 M2 M3 M4 M5     ← 해금 5개
+    // Row 1 (pos 5-9)  : P1 P2 P3 P4 P5     ← 소리북 5개
+    // Row 2 (pos 10-14): R1 R2 R3 R4 R5     ← 장구 5개
+    // Row 3 (pos 15-19): V1 V2 M6 V3 V4     ← 부채 4개 + 해금(borrowed) at col 2
+    // Row 4 (pos 20-24): B1 B2 B3 B4 R6     ← 거문고 4개 + 장구(borrowed) at col 4
     static func createDefaultSounds() -> [Sound] {
         let soundFiles = [
-            "sound0",  "sound1",  "sound2",  "sound3",  "sound4",   // Row 0
-            "sound5",  "sound6",  "sound7",  "sound8",  "sound9",   // Row 1
-            "sound10", "sound11", "sound14", "sound20", "sound0",   // Row 2
-            "sound1",  "sound2",  "sound3",  "sound4",  "sound5",   // Row 3
-            "sound6",  "sound7",  "sound8",  "sound9",  "sound10"   // Row 4
+            "M1", "M2", "M3", "M4", "M5",   // Row 0
+            "P1", "P2", "P3", "P4", "P5",   // Row 1
+            "R1", "R2", "R3", "R4", "R5",   // Row 2
+            "V1", "V2", "M6", "V3", "V4",   // Row 3
+            "B1", "B2", "B3", "B4", "R6"    // Row 4
         ]
 
         let categories: [Constants.SoundCategory] = [
@@ -32,8 +32,8 @@ struct SoundPad {
             .rhythm, .rhythm, .rhythm, .rhythm, .rhythm,
             // Row 3 – V ×4 + 1 borrowed M at col 2 (position 17)
             .voice, .voice, .melody, .voice, .voice,
-            // Row 4 – B ×4 + 1 borrowed P at col 4 (position 24)
-            .base, .base, .base, .base, .percussion
+            // Row 4 – B ×4 + 1 borrowed R at col 4 (position 24)
+            .base, .base, .base, .base, .rhythm
         ]
 
         return (0..<25).map { position in
