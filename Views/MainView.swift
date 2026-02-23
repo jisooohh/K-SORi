@@ -271,6 +271,28 @@ struct MainView: View {
     private func handlePadTapped(_ sound: Sound) {
         let pos = sound.position
 
+        // V (Voice): 1회 재생, 재탭 시 즉시 정지, 재생 종료 시 자동 비활성화
+        if sound.category == .voice {
+            if activePads.contains(pos) || pendingPads.contains(pos) {
+                audioPlayerManager.stopSound(at: pos)
+                activePads.remove(pos)
+                pendingPads.remove(pos)
+            } else {
+                let duration = audioPlayerManager.playSoundOnce(sound)
+                hapticManager.playHaptic(for: sound.category)
+                pendingPads.insert(pos)
+                pollForActivation(sound)
+                tutorialManager.handlePadTap(sound)
+                if duration > 0 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
+                        audioPlayerManager.stopSound(at: pos)
+                        activePads.remove(pos)
+                    }
+                }
+            }
+            return
+        }
+
         if pendingStopPads.contains(pos) {
             pendingStopPads.remove(pos)
 

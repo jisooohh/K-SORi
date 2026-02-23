@@ -66,6 +66,62 @@ class AudioPlayerManager: ObservableObject {
         print("⏳ Pad \(sound.position) scheduled for next beat")
     }
 
+    // MARK: - One-Shot Playback (Voice category)
+
+    /// Play sound exactly once (no loop). Returns actual audio duration in seconds.
+    func playSoundOnce(_ sound: Sound) -> TimeInterval {
+        var soundURL: URL?
+        soundURL = Bundle.main.url(forResource: sound.fileName, withExtension: "wav", subdirectory: "Resources")
+        if soundURL == nil {
+            soundURL = Bundle.main.url(forResource: sound.fileName, withExtension: "wav")
+        }
+        if soundURL == nil {
+            if let resourcePath = Bundle.main.resourcePath {
+                let paths = [
+                    (resourcePath as NSString).appendingPathComponent("Resources/\(sound.fileName).wav"),
+                    (resourcePath as NSString).appendingPathComponent("\(sound.fileName).wav")
+                ]
+                for path in paths {
+                    if FileManager.default.fileExists(atPath: path) {
+                        soundURL = URL(fileURLWithPath: path)
+                        break
+                    }
+                }
+            }
+        }
+
+        guard let finalURL = soundURL else {
+            print("❌ Sound file not found: \(sound.fileName).wav")
+            return 0
+        }
+
+        do {
+            let file = try AVAudioFile(forReading: finalURL)
+            let format = file.processingFormat
+            let frameCount = AVAudioFrameCount(file.length)
+            let duration = Double(file.length) / format.sampleRate
+
+            guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else { return 0 }
+            buffer.frameLength = 0
+            try file.read(into: buffer)
+
+            let node = AVAudioPlayerNode()
+            engineManager.engine.attach(node)
+            engineManager.engine.connect(node, to: engineManager.mainMixer, format: format)
+            engineManager.startEngineIfNeeded()
+
+            node.scheduleBuffer(buffer, at: nil, options: [], completionHandler: nil)
+            node.play()
+
+            playerNodes[sound.position] = node
+            print("🎵 Playing once: \(sound.fileName) (\(String(format: "%.2f", duration))s)")
+            return duration
+        } catch {
+            print("❌ Playback failed: \(error.localizedDescription)")
+            return 0
+        }
+    }
+
     // MARK: - Playback Control
 
     private func playSound(_ sound: Sound) {
