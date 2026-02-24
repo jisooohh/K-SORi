@@ -15,12 +15,74 @@ class BeatEngine: ObservableObject {
     private var timer: Timer?
     private var startTime: Date?
     private var beatDuration: TimeInterval {
-        60.0 / bpm // Duration of one beat in seconds
+        60.0 / bpm
     }
 
-    // Callbacks for beat events
     var onBeat: ((Int) -> Void)?
     var onMeasure: ((Int) -> Void)?
+
+    // ── Transport epoch ───────────────────────────────────────────────────────
+    /// Hardware timestamp (mach_absolute_time) when the first sound was triggered.
+    /// Zero = no transport running.
+    private(set) var epochMachTime: UInt64 = 0
+    /// Wall-clock date matching epochMachTime (used for SwiftUI phase animation).
+    private(set) var epochDate: Date?
+
+    private var timebase: mach_timebase_info_data_t = {
+        var i = mach_timebase_info_data_t(); mach_timebase_info(&i); return i
+    }()
+    private func machToSec(_ t: UInt64) -> Double {
+        Double(t) * Double(timebase.numer) / Double(timebase.denom) / 1_000_000_000
+    }
+    private func secToMach(_ s: Double) -> UInt64 {
+        UInt64(s * 1_000_000_000 * Double(timebase.denom) / Double(timebase.numer))
+    }
+
+    // MARK: - Transport Epoch API
+
+    /// Capture the current moment as the transport origin (no-op if already set).
+    func setEpochToNow() {
+        guard epochMachTime == 0 else { return }
+        epochMachTime = mach_absolute_time()
+        epochDate = Date()
+        print("⏱ Transport epoch set")
+    }
+
+    /// Clear the epoch so the next sound starts fresh.
+    func resetEpoch() {
+        epochMachTime = 0
+        epochDate = nil
+        print("⏱ Transport epoch cleared")
+    }
+
+    /// Returns the mach_absolute_time of the next bar boundary (≥60 ms from now).
+    func nextBarBoundaryMachTime() -> UInt64 {
+        guard epochMachTime > 0 else { return mach_absolute_time() }
+        let now = mach_absolute_time()
+        let elapsedSec = machToSec(now - epochMachTime)
+        let barDur = (60.0 / bpm) * Double(beatsPerMeasure)  // 2.0 s at 120 BPM / 4 beats
+        let lookahead = 0.06                                   // 60 ms scheduling window
+        let rawBar = Int(elapsedSec / barDur)
+        var nextBarSec = Double(rawBar + 1) * barDur
+        // If we're already too close to that bar, jump one further
+        if nextBarSec - elapsedSec < lookahead {
+            nextBarSec = Double(rawBar + 2) * barDur
+        }
+        return epochMachTime + secToMach(nextBarSec)
+    }
+
+    /// Wraps nextBarBoundaryMachTime() as an AVAudioTime for hardware-accurate scheduling.
+    func nextBarBoundaryAVAudioTime() -> AVAudioTime {
+        AVAudioTime(hostTime: nextBarBoundaryMachTime())
+    }
+
+    /// 0…1 phase within `loopDuration` using the wall-clock Date.
+    /// Call from TimelineView using context.date for smooth, display-synced animation.
+    func transportPhase(for loopDuration: Double, at date: Date) -> Double {
+        guard let epochDate = epochDate, loopDuration > 0 else { return 0 }
+        let elapsed = date.timeIntervalSince(epochDate)
+        return elapsed.truncatingRemainder(dividingBy: loopDuration) / loopDuration
+    }
 
     // MARK: - Initialization
 
@@ -55,6 +117,7 @@ class BeatEngine: ObservableObject {
         timer = nil
         isRunning = false
         currentBeat = 0
+        resetEpoch()
 
         print("⏹️ BeatEngine stopped")
     }
