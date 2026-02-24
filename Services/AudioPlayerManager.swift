@@ -198,10 +198,10 @@ class AudioPlayerManager: ObservableObject {
     // MARK: - Helpers
 
     private func resolveURL(for fileName: String) -> URL? {
-        if let url = Bundle.main.url(forResource: fileName, withExtension: "wav", subdirectory: "Resources") { return url }
-        if let url = Bundle.main.url(forResource: fileName, withExtension: "wav") { return url }
+        if let url = Bundle.main.url(forResource: fileName, withExtension: "m4a", subdirectory: "Resources") { return url }
+        if let url = Bundle.main.url(forResource: fileName, withExtension: "m4a") { return url }
         if let base = Bundle.main.resourcePath {
-            for suffix in ["Resources/\(fileName).wav", "\(fileName).wav"] {
+            for suffix in ["Resources/\(fileName).m4a", "\(fileName).m4a"] {
                 let path = (base as NSString).appendingPathComponent(suffix)
                 if FileManager.default.fileExists(atPath: path) {
                     return URL(fileURLWithPath: path)
