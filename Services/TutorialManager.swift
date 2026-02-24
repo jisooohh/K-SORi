@@ -5,10 +5,10 @@ import SwiftUI
 enum TutorialStep: Int, CaseIterable {
     case recordButton    = 0
     case padPercussion1  = 1   // P3
-    case padPercussion2  = 2   // P2
+    case padPercussion2  = 2   // P4
     case padMelody       = 3   // M3
-    case padBase         = 4   // B4
-    case padVoice        = 5   // V3
+    case padVoice        = 4   // V3
+    case padBase         = 5   // B4
     case stopButton      = 6
     case fileButton      = 7
     case playButton      = 8
@@ -22,10 +22,10 @@ enum TutorialStep: Int, CaseIterable {
     ///   Row 4 (20-24): B1 B2 B3 B4 R6
     static let fixedPadPositions: [TutorialStep: Int] = [
         .padPercussion1: 7,   // P3
-        .padPercussion2: 6,   // P2
+        .padPercussion2: 8,   // P4
         .padMelody:      2,   // M3
-        .padBase:        23,  // B4
-        .padVoice:       18   // V3
+        .padVoice:       18,  // V3
+        .padBase:        23   // B4
     ]
 
     var title: String {
@@ -34,8 +34,8 @@ enum TutorialStep: Int, CaseIterable {
         case .padPercussion1: return "Percussion · Soribuk"
         case .padPercussion2: return "Percussion · Soribuk"
         case .padMelody:      return "Melody · Haegeum"
-        case .padBase:        return "Bass · Geomungo"
         case .padVoice:       return "Voice · Buchae"
+        case .padBase:        return "Bass · Geomungo"
         case .stopButton:     return "Stop Recording"
         case .fileButton:     return "Open File List"
         case .playButton:     return "Play Your Recording"
@@ -50,13 +50,13 @@ enum TutorialStep: Int, CaseIterable {
         case .padPercussion1:
             return "Tap the P3 pad to start the beat."
         case .padPercussion2:
-            return "Now tap the P2 pad to layer another beat."
+            return "Now tap the P4 pad to layer another beat."
         case .padMelody:
             return "Tap the M3 pad to weave in a melody."
-        case .padBase:
-            return "Tap the B4 pad to add a bass line."
         case .padVoice:
             return "Tap the V3 pad to add a vocal texture."
+        case .padBase:
+            return "Tap the B4 pad to add a bass line."
         case .stopButton:
             return "Tap the square to stop and save your recording."
         case .fileButton:
