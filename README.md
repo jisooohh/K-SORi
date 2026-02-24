@@ -126,7 +126,7 @@ makes the app accessible to anyone, regardless of musical background.
 
 ### Intro Screen
 
-<img src="screenshots/intro.png" width="300"/>
+<img src="https://github.com/user-attachments/assets/e7832d50-237b-41f8-85a0-2dcea253d477" width="300"/>
 
 *여백(餘白)의 미 — The beauty of empty space*
 
@@ -134,7 +134,7 @@ makes the app accessible to anyone, regardless of musical background.
 
 ### Main Pad
 
-<img src="screenshots/main.png" width="300"/>
+<img src="https://github.com/user-attachments/assets/36199df6-98dd-49b0-ba43-539789fb6ce4" width="300"/>
 
 *5×5 사운드 패드 — 악기 이미지로 구성된 그리드*
 
@@ -142,7 +142,7 @@ makes the app accessible to anyone, regardless of musical background.
 
 ### Interactive Tutorial
 
-<img src="screenshots/tutorial.png" width="300"/>
+<img src="https://github.com/user-attachments/assets/b1c08bca-460d-4d29-80c6-943b6e034cf0" width="300"/>
 
 *P3 → P4 → M3 → V3 → B4 순서의 단계별 안내*
 
@@ -150,7 +150,7 @@ makes the app accessible to anyone, regardless of musical background.
 
 ### Saved Recordings
 
-<img src="screenshots/recordings.png" width="300"/>
+<img src="https://github.com/user-attachments/assets/98c7f7bd-6e83-43cb-a715-2a53526816c6" width="300"/>
 
 *녹음 리스트 — 저장, 재생, 삭제*
 
