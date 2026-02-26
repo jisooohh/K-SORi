@@ -37,7 +37,7 @@ struct IntroView: View {
 
                             traditionalFeatureCard(
                                 title: "K-SORi SoundPad Features",
-                                description: "Experience traditional sounds with intuitive Giwa buttons. Create your own music easily through simple composition and recording functions.",
+                                description: "Tap rhythm, melody, percussion, voice, and bass pads.\nEvery sound is harmonically structured — so any combination creates natural music.\n\nNo theory required. Just touch and create.",
                                 color: GugakDesign.Colors.obangsaekRed,
                                 icon: "music.note"
                             )
@@ -79,8 +79,8 @@ struct IntroView: View {
 
                         Spacer(minLength: 40)
                     }
-                    // 콘텐츠 최대 너비 제한 (iPad landscape 대응) + 중앙 정렬
-                    .frame(maxWidth: 600)
+                    // 콘텐츠 최대 너비 제한 + 중앙 정렬
+                    .frame(maxWidth: 720)
                     .frame(maxWidth: .infinity)
                     // 화면보다 짧을 때 Spacer가 남는 공간을 균등 분배 → 수직 중앙 정렬
                     .frame(minHeight: geo.size.height)
@@ -182,43 +182,27 @@ struct IntroView: View {
     }
 
     private var hanjiDescriptionText: Text {
-        let part1 = Text("Korean traditional music offers deep rest through the art of ")
+        let part1 = Text("A Korean Traditional Sound Pad —\nwhere \"")
             .font(.system(size: 15))
             .foregroundColor(.white.opacity(0.85))
 
-        let part2 = Text("empty space")
+        let part2 = Text("Sori")
             .font(.system(size: 15, weight: .bold))
             .foregroundColor(GugakDesign.Colors.obangsaekYellow)
 
-        let part3 = Text(" and ")
+        let part3 = Text("\" means sound, and the small \"")
             .font(.system(size: 15))
             .foregroundColor(.white.opacity(0.85))
 
-        let part4 = Text("harmony")
+        let part4 = Text("i")
             .font(.system(size: 15, weight: .bold))
             .foregroundColor(GugakDesign.Colors.obangsaekYellow)
 
-        let part5 = Text(". Meet ")
+        let part5 = Text("\" stands for inspiration.")
             .font(.system(size: 15))
             .foregroundColor(.white.opacity(0.85))
 
-        let part6 = Text("Gugak MIDI Pad")
-            .font(.system(size: 15, weight: .bold))
-            .foregroundColor(GugakDesign.Colors.obangsaekYellow)
-
-        let part7 = Text(", your own healing sound completed with a ")
-            .font(.system(size: 15))
-            .foregroundColor(.white.opacity(0.85))
-
-        let part8 = Text("single touch")
-            .font(.system(size: 15, weight: .bold))
-            .foregroundColor(GugakDesign.Colors.obangsaekYellow)
-
-        let part9 = Text(".")
-            .font(.system(size: 15))
-            .foregroundColor(.white.opacity(0.85))
-
-        return part1 + part2 + part3 + part4 + part5 + part6 + part7 + part8 + part9
+        return part1 + part2 + part3 + part4 + part5
     }
 
     private var hanjiCardBackground: some View {
@@ -351,8 +335,18 @@ struct IntroView: View {
 
     // MARK: - Beauty of K-SORi Card (with instrument images)
 
+    private func categoryDisplayLabel(_ category: Constants.SoundCategory) -> String {
+        switch category {
+        case .melody:     return "MELODY"
+        case .percussion: return "PERCUSSION"
+        case .rhythm:     return "RHYTHM"
+        case .voice:      return "VOCAL"
+        case .base:       return "BASS"
+        }
+    }
+
     private var beautyOfKSORiCard: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 0) {
             HStack(spacing: 16) {
                 ZStack {
                     WadangPattern(style: .lotus)
@@ -366,7 +360,7 @@ struct IntroView: View {
                     Text("The Beauty of K-SORi")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
-                    Text("Gugak embodies the aesthetics of nature. Melodies based on breath provide comfort and catharsis through the harmony of instruments.")
+                    Text("Korean traditional music expresses emotion through space, breath, and harmony.\nIts tones carry depth, joy, and spirit — shaping a uniquely Korean sound.")
                         .font(.system(size: 12))
                         .foregroundColor(.white.opacity(0.8))
                         .lineSpacing(3)
@@ -377,12 +371,16 @@ struct IntroView: View {
             // 5 representative instrument images
             HStack(spacing: 1) {
                 ForEach(Constants.SoundCategory.allCases, id: \.self) { category in
-                    VStack(spacing: 2) {
+                    VStack(spacing: 0) {
                         InstrumentImage(name: category.instrumentImageName)
                             .scaledToFit()
                             .frame(height: 144)
                             .brightness(-0.05)
                             .saturation(0.85)
+                        Text(categoryDisplayLabel(category))
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(GugakDesign.Colors.obangsaekYellow)
+                            .padding(.top, 2)
                         Text(category.instrumentNameEnglish)
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundColor(.white.opacity(0.7))
@@ -390,7 +388,6 @@ struct IntroView: View {
                     .frame(maxWidth: .infinity)
                 }
             }
-            .padding(.top, 1)
         }
         .padding(16)
         .background(
