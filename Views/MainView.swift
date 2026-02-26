@@ -106,6 +106,9 @@ struct MainView: View {
     @State private var pendingPads:     Set<Int> = []
     @State private var pendingStopPads: Set<Int> = []
 
+    @Environment(\.horizontalSizeClass) private var hSizeClass
+    private var isCompact: Bool { hSizeClass == .compact }
+
     private var categoryActiveCounts: [Constants.SoundCategory: Int] {
         var counts: [Constants.SoundCategory: Int] = [:]
         for position in activePads {
@@ -120,10 +123,10 @@ struct MainView: View {
         ZStack {
             GugakDesign.Colors.darkNight.ignoresSafeArea()
 
-            VStack(spacing: GugakDesign.Spacing.md) {
+            VStack(spacing: isCompact ? GugakDesign.Spacing.sm : GugakDesign.Spacing.md) {
                 topControlBar
                     .padding(.horizontal, GugakDesign.Spacing.md)
-                    .padding(.top, GugakDesign.Spacing.md)
+                    .padding(.top, isCompact ? GugakDesign.Spacing.sm : GugakDesign.Spacing.md)
 
                 InstrumentDisplayView(categoryActiveCounts: categoryActiveCounts)
                     .padding(.horizontal, GugakDesign.Spacing.md)
@@ -134,9 +137,9 @@ struct MainView: View {
                     pendingPads: $pendingPads,
                     onPadTapped: handlePadTapped
                 )
-                .padding(.horizontal, GugakDesign.Spacing.sm)
+                .padding(.horizontal, isCompact ? GugakDesign.Spacing.md : GugakDesign.Spacing.sm)
 
-                Spacer(minLength: GugakDesign.Spacing.md)
+                Spacer(minLength: GugakDesign.Spacing.sm)
             }
         }
         .onAppear {
@@ -262,7 +265,7 @@ struct MainView: View {
                 .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.1)))
                 .animation(.easeInOut(duration: 0.2), value: timerColor == Color.green.opacity(0.9))
         }
-        .padding(GugakDesign.Spacing.md)
+        .padding(isCompact ? GugakDesign.Spacing.sm : GugakDesign.Spacing.md)
         .glassmorphism()
     }
 
@@ -484,6 +487,10 @@ struct InstrumentDisplayView: View {
         .melody, .percussion, .rhythm, .voice, .base
     ]
 
+    @Environment(\.horizontalSizeClass) private var hSizeClass
+    private var isCompact: Bool { hSizeClass == .compact }
+    private var displayHeight: CGFloat { isCompact ? 100 : 180 }
+
     var body: some View {
         HStack(spacing: 6) {
             ForEach(orderedCategories, id: \.self) { category in
@@ -494,7 +501,7 @@ struct InstrumentDisplayView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 180)
+        .frame(height: displayHeight)
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .glassmorphism()
@@ -505,9 +512,11 @@ struct InstrumentColumn: View {
     let category: Constants.SoundCategory
     let activeCount: Int
 
-    private let containerH: CGFloat     = 162
-    private let instrumentH: CGFloat    = 155
-    private let inactiveOffset: CGFloat = 35
+    @Environment(\.horizontalSizeClass) private var hSizeClass
+    private var isCompact: Bool { hSizeClass == .compact }
+    private var containerH: CGFloat     { isCompact ? 90 : 162 }
+    private var instrumentH: CGFloat    { isCompact ? 85 : 155 }
+    private var inactiveOffset: CGFloat { isCompact ? 18 : 35 }
 
     private var level: Int    { min(activeCount, 6) }
     private var isActive: Bool { activeCount > 0 }

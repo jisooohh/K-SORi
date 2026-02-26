@@ -7,6 +7,9 @@ struct IntroView: View {
     @State private var showContent = false
     @State private var dontShowAgain = false
 
+    @Environment(\.horizontalSizeClass) private var hSizeClass
+    private var isCompact: Bool { hSizeClass == .compact }
+
     var body: some View {
         ZStack {
             // Traditional Background with Wadang Pattern
@@ -26,7 +29,7 @@ struct IntroView: View {
 
                         // Main Description with Hanji Style
                         hanjiDescriptionCard
-                            .padding(.horizontal, 32)
+                            .padding(.horizontal, isCompact ? 20 : 32)
                             .opacity(showContent ? 1 : 0)
                             .scaleEffect(showContent ? 1 : 0.95)
                             .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: showContent)
@@ -42,7 +45,7 @@ struct IntroView: View {
                                 icon: "music.note"
                             )
                         }
-                        .padding(.horizontal, 32)
+                        .padding(.horizontal, isCompact ? 20 : 32)
                         .opacity(showContent ? 1 : 0)
                         .offset(y: showContent ? 0 : 20)
                         .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.3), value: showContent)
@@ -139,19 +142,19 @@ struct IntroView: View {
             // K-SORi logo with Taeguk inside the O
             HStack(alignment: .center, spacing: 0) {
                 Text("K-S")
-                    .font(.system(size: 64, weight: .bold, design: .serif))
+                    .font(.system(size: isCompact ? 44 : 64, weight: .bold, design: .serif))
                     .foregroundColor(.white)
 
                 ZStack {
                     // Invisible O maintains correct kerning/spacing
                     Text("O")
-                        .font(.system(size: 64, weight: .bold, design: .serif))
+                        .font(.system(size: isCompact ? 44 : 64, weight: .bold, design: .serif))
                         .foregroundColor(.clear)
-                    TaegukkImageView(size: 48)
+                    TaegukkImageView(size: isCompact ? 33 : 48)
                 }
 
                 Text("Ri")
-                    .font(.system(size: 64, weight: .bold, design: .serif))
+                    .font(.system(size: isCompact ? 44 : 64, weight: .bold, design: .serif))
                     .foregroundColor(.white)
             }
             .shadow(color: GugakDesign.Colors.obangsaekRed.opacity(0.3), radius: 10)
@@ -166,7 +169,7 @@ struct IntroView: View {
                 .frame(width: 150, height: 20)
                 .scaleEffect(x: -1, y: 1)
         }
-        .padding(.horizontal, 32)
+        .padding(.horizontal, isCompact ? 20 : 32)
     }
 
     // MARK: - Hanji Description Card
@@ -374,7 +377,7 @@ struct IntroView: View {
                     VStack(spacing: 0) {
                         InstrumentImage(name: category.instrumentImageName)
                             .scaledToFit()
-                            .frame(height: 144)
+                            .frame(height: isCompact ? 90 : 144)
                             .brightness(-0.05)
                             .saturation(0.85)
                         Text(categoryDisplayLabel(category))
